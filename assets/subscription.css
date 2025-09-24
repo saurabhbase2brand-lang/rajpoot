@@ -1,0 +1,142 @@
+.spare_im_subscriptio {
+  border: 1px solid #efe9e3;
+  padding: 24px;
+  border-radius: 6px;
+}
+
+.subscription-option [type="radio"]:checked,
+.subscription-option [type="radio"]:not(:checked) {
+  position: absolute;
+  left: -9999px;
+}
+
+.subscription-option [type="radio"]:checked + label,
+.subscription-option [type="radio"]:not(:checked) + label {
+  position: relative;
+  padding-left: 40px;
+  cursor: pointer;
+  line-height: 20px;
+  display: inline-block;
+  font-family: var(--font-primary);
+  font-weight: 400; 
+  font-size: 16px;
+  color: #1a1402;
+  text-align: center;
+}
+
+.subscription-option [type="radio"]:checked + label:before,
+.subscription-option [type="radio"]:not(:checked) + label:before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #d68609;
+  border-radius: 100%;
+  background: #d68609;
+}
+
+.subscription-option [type="radio"]:checked + label:after,
+.subscription-option [type="radio"]:not(:checked) + label:after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  border-radius: 100%;
+  -webkit-transition: all 0.2s ease;
+  transition: all 0.2s ease;
+}
+
+.subscription-option [type="radio"]:not(:checked) + label:after {
+  opacity: 0;
+  -webkit-transform: scale(0);
+  transform: scale(0);
+}
+
+.subscription-option [type=radio]:not(:checked) + label:before {
+  background-color: #FAF4EF;
+  border-color: #efe9e3;
+}
+
+.subscription-option [type="radio"]:checked + label:after {
+  opacity: 1;
+  -webkit-transform: scale(1);
+  transform: scale(1);
+}
+
+.subscription-option {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.subscription-option .subscription_block {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.subscription_block .right_price p {
+  font-family: var(--font-primary);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 16px;
+  text-align: center;
+  color: #1a1402;
+  display: flex;
+  gap: 12px;
+}
+
+.spare_im_subscription {
+  border: 1px solid #efe9e3;
+  border-radius: 6px;
+  padding:20px;
+  position: relative;
+}
+
+.spare_im_subscription span.subscription_tag {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    font-size: 12px;
+    line-height: normal;
+    letter-spacing: 0;
+    border: 1px solid #efe9e3;
+    padding: 4.5px 7.5px;
+    position: absolute;
+    top: -13px;
+    z-index: 2;
+    border-radius: 4px;
+    background: #faf4f0;
+}
+.select-product-plan-days .custom-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 100%;
+    padding: 10px 40px 10px 15px;
+    font-family: var(--font-primary);
+    border: 1px solid #EFE9E3;
+    border-radius: 4px;
+    background-color: var(--color-accent);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10,50 L70,110 L130,50' stroke='%23333' stroke-width='20' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    background-size: 15px;
+    font-size: 16px;
+    cursor: pointer;
+}
+.select-product-plan-days .custom-select-wrapper {
+    position: relative;
+    width: 100%;
+    margin-bottom: 20px;
+}
+*:focus-visible {
+    outline:none;
+    outline-offset: none;
+    box-shadow:none;
+}
