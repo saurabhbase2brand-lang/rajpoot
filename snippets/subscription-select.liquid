@@ -1,0 +1,114 @@
+{{ 'subscription.css' | asset_url | stylesheet_tag }}  
+<script src="{{ 'subscription.js' | asset_url }}" defer="defer"></script>
+
+
+{% assign variant = product.variants | where: "title", value | first %}
+{% assign selling_plans = variant.selling_plan_allocations %}
+
+{% if selling_plans.size > 0 %}
+  {% assign base_price = variant.price | money %}
+  {% assign compare_price = variant.compare_at_price | money | default: base_price %}
+
+  {% assign subscription_price = base_price %}
+  {% assign discount_percent = 0 %}
+
+  {% assign first_plan = selling_plans[0] %}
+  {% assign subscription_price = first_plan.price | money %}
+
+  {% for adjustment in first_plan.selling_plan.price_adjustments %}
+    {% if adjustment.value_type == 'percentage' %}
+      {% assign discount_percent = adjustment.value %}
+    {% endif %}
+  {% endfor %}
+
+  <div class="spare_im_subscription">
+    <div class="subscription-option">
+      <div class="subscription_block">
+        <div class="left">
+          <input data-value="{{ settings.einmaliger }}" type="radio" id="test1" name="radio-group" checked>
+          <label for="test1">{{ settings.einmaliger }}</label>
+        </div>
+        <div class="right_price">
+          <p actual-bundle-price="{{ base_price }}">{{ base_price }}</p>
+        </div>
+      </div>
+
+      <div class="subscription_block">
+        <div class="left">
+          <input data-value="{{ settings.abonnement }}" type="radio" id="test2" name="radio-group">
+          <label for="test2">{{ settings.abonnement }}</label>
+        </div>
+        <div class="right_price">
+          <p subscription-bundle-price="{{ subscription_price }}">
+            <span style="text-decoration: line-through;">{{ compare_price }}</span>
+            <span>{{ subscription_price }}</span>
+          </p>
+        </div>
+
+        {% if discount_percent > 0 %}
+          <span class="subscription_tag">Spare im Abo {{ discount_percent }}%</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+
+
+{% if selling_plans.size > 0 %}
+  <div class="select-product-plan-days" style="display: none;">
+    <div class="custom-select-wrapper">
+      <select name="selling_plan" class="custom-select">
+        <option value="">Wähle deinen Plan</option>
+        
+        {% for allocation in selling_plans %}
+          {% assign plan = allocation.selling_plan %}
+          {% assign variant_id = allocation.product_variant_id %}
+          <option 
+            custom-data-plan="{{ plan.name }}" 
+            data-plan-id="{{ allocation.selling_plan.id }}"
+          >
+            {{ plan.name }}
+          </option>
+        {% endfor %}
+        
+      </select>
+    </div>
+  </div>
+{% endif %}
+
+
+
+
+
+
+<script>
+ (function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    const subscriptionDropdown = document.querySelector(".select-product-plan-days");
+    const radioButtons = document.querySelectorAll('input[name="radio-group"]');
+
+    radioButtons.forEach((radio) => {
+      radio.addEventListener("change", function () {
+        if (this.getAttribute("data-value") === "{{ settings.abonnement }}") {
+          subscriptionDropdown.style.display = "block";
+        } else {
+          subscriptionDropdown.style.display = "none";
+        }
+      });
+    });
+
+    // Trigger on load (if pre-selected is abonnement)
+    const checkedRadio = document.querySelector('input[name="radio-group"]:checked');
+    if (checkedRadio && checkedRadio.getAttribute("data-value") === "{{ settings.abonnement }}") {
+      subscriptionDropdown.style.display = "block";
+    }
+  });
+})();
+
+
+
+
+
+</script>
+
