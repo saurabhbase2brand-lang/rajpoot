@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 node_modules
 .DS_Store
 
@@ -23,3 +24,6 @@ database.sqlite
 # Ignore shopify files created during app dev
 .shopify/*
 .shopify.lock
+=======
+.shopify
+>>>>>>> dd2526ecf05efe1c56cfb4513e055773b573a5af
