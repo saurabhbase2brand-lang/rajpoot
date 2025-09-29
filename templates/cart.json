@@ -24,10 +24,10 @@
           "type": "subtotal",
           "settings": {}
         },
-        "new_cnc_delivery_method_BMAn87": {
-          "type": "shopify://apps/new-cnc/blocks/delivery-method/0199955a-459c-7578-9c56-38b677eedcf4",
+        "cnc_delivery_method_p88TUM": {
+          "type": "shopify://apps/cnc/blocks/delivery-method/83f669e1-d792-41a3-95ae-830d48570c04",
           "settings": {
-            "cart__ctas": "",
+            "cart__ctas": "cart__ctas",
             "main_title": "SELECT A DELIVERY METHOD:",
             "clc_title": "Click & Collect",
             "clc_home_title": "Home Delivery",
@@ -49,7 +49,7 @@
       },
       "block_order": [
         "subtotal",
-        "new_cnc_delivery_method_BMAn87",
+        "cnc_delivery_method_p88TUM",
         "buttons"
       ],
       "settings": {
