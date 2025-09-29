@@ -27,7 +27,7 @@
         "new_cnc_delivery_method_BMAn87": {
           "type": "shopify://apps/new-cnc/blocks/delivery-method/0199955a-459c-7578-9c56-38b677eedcf4",
           "settings": {
-            "cart__ctas": "cart__checkout-button",
+            "cart__ctas": "",
             "main_title": "SELECT A DELIVERY METHOD:",
             "clc_title": "Click & Collect",
             "clc_home_title": "Home Delivery",
