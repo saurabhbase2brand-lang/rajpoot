@@ -49,8 +49,8 @@
             "show_gift_card_recipient": true
           }
         },
-        "new_cnc_pdp_delivery_method_3kCahB": {
-          "type": "shopify://apps/new-cnc/blocks/pdp-delivery-method/0199955a-459c-7578-9c56-38b677eedcf4",
+        "cnc_pdp_delivery_method_HF4qXN": {
+          "type": "shopify://apps/cnc/blocks/pdp-delivery-method/83f669e1-d792-41a3-95ae-830d48570c04",
           "settings": {
             "button_title": "Check Stock in Store",
             "close_button_title": "Close Stock Check",
@@ -81,7 +81,7 @@
         "subscription_select_3rFjcr",
         "quantity_selector",
         "buy_buttons",
-        "new_cnc_pdp_delivery_method_3kCahB",
+        "cnc_pdp_delivery_method_HF4qXN",
         "description",
         "share"
       ],
