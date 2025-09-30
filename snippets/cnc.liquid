@@ -1,0 +1,175 @@
+<div class="cnc-stockcheck" id="cnc-stockcheck">
+  <div class="cnc-header">
+    <button class="cnc-close" type="button" id="cnc-toggle-btn">
+      <span class="cnc-close-icon">✕</span>
+      <span>Close Stock Check</span>
+    </button>
+  </div>
+
+  <div class="cnc-search" id="cnc-search-box" style="display:none;">
+    <input id="cnc-postcode" class="cnc-input" type="text" placeholder="Enter Postcode" />
+    <button id="cnc-search-btn" class="cnc-search-btn" aria-label="Search">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-1.06 1.06l.27.28h.79l5 5 1.5-1.5-5-5zM10 15.5A5.5 5.5 0 1010 4a5.5 5.5 0 000 11.5z" fill="currentColor"/></svg>
+    </button>
+  </div>
+
+  <div id="cnc-results" class="cnc-results" aria-live="polite"></div>
+</div>
+
+<style>
+  :root{--cnc-green:#10b981;--cnc-green-d:#0ea171;--cnc-red:#ef4444;--cnc-gray:#e5e7eb;--cnc-text:#0f172a;--cnc-sub:#475569}
+  .cnc-stockcheck{max-width:620px;border:1px solid var(--cnc-green);border-radius:16px;padding:12px;background:#fff;font-family:system-ui,Segoe UI,Inter,Roboto,Helvetica,Arial,sans-serif}
+  .cnc-header{display:flex;justify-content:center}
+  .cnc-close{display:flex;align-items:center;gap:8px;border:1px solid var(--cnc-green);color:var(--cnc-green);background:#fff;border-radius:999px;padding:8px 18px;font-weight:700;cursor:pointer}
+  .cnc-close:hover{background:#f6fffb}
+  .cnc-close-icon{font-size:16px}
+  .cnc-search{display:flex;gap:8px;margin:12px 8px}
+  .cnc-input{flex:1;border:1px solid #d1d5db;border-radius:6px;padding:10px 12px;font-size:14px}
+  .cnc-search-btn{width:44px;display:grid;place-items:center;border:none;background:var(--cnc-green);color:#fff;border-radius:6px;cursor:pointer}
+  .cnc-search-btn:hover{background:var(--cnc-green-d)}
+
+  .cnc-results{margin:4px 6px 8px}
+  .cnc-item{padding:12px 8px;border-top:1px solid var(--cnc-gray)}
+  .cnc-row{display:flex;align-items:center;gap:10px;cursor:pointer}
+  /* custom radio */
+  .cnc-radio{appearance:none;-webkit-appearance:none;inline-size:18px;block-size:18px;border:2px solid #cbd5e1;border-radius:999px;display:inline-grid;place-items:center;cursor:pointer}
+  .cnc-radio:checked{border-color:var(--cnc-green)}
+  .cnc-radio:checked::after{content:""; inline-size:10px; block-size:10px; background:var(--cnc-green); border-radius:999px}
+  .cnc-name{font-weight:700}
+  .cnc-distance{margin-left:6px;color:var(--cnc-sub);font-weight:600;font-size:13px}
+  .cnc-badge{margin-left:auto;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+  .cnc-badge.cnc-in{color:var(--cnc-green)}
+  .cnc-badge.cnc-out{color:var(--cnc-red)}
+  .cnc-caret{margin-left:8px;transition:transform .18s ease}
+  .cnc-detail{margin-left:30px;margin-top:8px;color:#111;font-size:14px;display:none;line-height:1.45}
+  .cnc-item.cnc-open .cnc-detail{display:block}
+  .cnc-item.cnc-open .cnc-caret{transform:rotate(180deg)}
+  .cnc-loader,.cnc-empty,.cnc-error{padding:10px 8px;font-size:14px}
+  .cnc-error{color:var(--cnc-red);font-weight:700}
+</style>
+
+<script>
+(function(){
+  const API_BASE = "http://localhost:3000"; // change if needed
+  const toggleBtn = document.getElementById('cnc-toggle-btn');
+  const searchBox = document.getElementById('cnc-search-box');
+  const postcodeInput = document.getElementById('cnc-postcode');
+  const searchBtn = document.getElementById('cnc-search-btn');
+  const resultsBox = document.getElementById('cnc-results');
+
+  let visible = false;
+  toggleBtn.addEventListener('click', ()=>{
+    visible = !visible;
+    searchBox.style.display = visible ? 'flex' : 'none';
+    resultsBox.innerHTML = '';
+    if(visible) postcodeInput.focus();
+  });
+
+  const badge = (status)=>{
+    const ok = /instock|in_stock/i.test(status);
+    return `<span class="cnc-badge ${ok?'cnc-in':'cnc-out'}">
+      ${ok ? '✔ In stock' : '✖ Out of stock'}
+    </span>`;
+  };
+
+  const address = (a)=>{
+    const parts = [
+      a?.address1, a?.address2,
+      [a?.city,a?.province].filter(Boolean).join(', '),
+      [a?.country,a?.zip].filter(Boolean).join(' - ')
+    ].filter(Boolean);
+    return parts.join('<br>');
+  };
+
+  // radio + accordion row
+  const rowTpl = (loc, idx)=>`
+    <div class="cnc-item" data-idx="${idx}">
+      <div class="cnc-row" data-toggle>
+        <input class="cnc-radio" type="radio" name="cnc-pickup" aria-label="Select ${escapeHtml(loc.name)}" />
+        <div class="cnc-name">${escapeHtml(loc.name)}</div>
+        <div class="cnc-distance">${Number(loc.distanceKm||0).toFixed(0)} km</div>
+        ${badge(loc.status)}
+        <svg class="cnc-caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 10l5 5 5-5z" fill="#94a3b8"/>
+        </svg>
+      </div>
+      <div class="cnc-detail">${address(loc.address)}</div>
+    </div>
+  `;
+
+  function escapeHtml(s){return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
+
+  function renderResults(data){
+    const list = [...(data.inRadius||[]), ...(data.outOfRadius||[])];
+    if(!list.length){ resultsBox.innerHTML = `<div class="cnc-empty">No nearby stores found.</div>`; return; }
+
+    resultsBox.innerHTML = list.map(rowTpl).join('');
+
+    const items = [...resultsBox.querySelectorAll('.cnc-item')];
+
+    items.forEach((item, i)=>{
+      const radio = item.querySelector('.cnc-radio');
+      const header = item.querySelector('[data-toggle]');
+
+      // select radio + open accordion on row click
+      header.addEventListener('click', (e)=>{
+        // avoid double toggling when directly clicking radio
+        if(e.target === radio) return;
+        radio.checked = true;
+        items.forEach(el=>el.classList.remove('cnc-open'));
+        item.classList.add('cnc-open');
+        emitSelected(list[i]);
+      });
+
+      // when radio clicked manually
+      radio.addEventListener('change', ()=>{
+        if(radio.checked){
+          items.forEach(el=>el.classList.remove('cnc-open'));
+          item.classList.add('cnc-open');
+          emitSelected(list[i]);
+        }
+      });
+    });
+
+    // default: select+open first item
+    const firstRadio = resultsBox.querySelector('.cnc-radio');
+    const firstItem = resultsBox.querySelector('.cnc-item');
+    if(firstRadio && firstItem){
+      firstRadio.checked = true; 
+      firstItem.classList.add('cnc-open');
+      emitSelected(list[0]);
+    }
+  }
+
+  function emitSelected(location){
+    window.dispatchEvent(new CustomEvent('cnc:pickupSelected', { detail: { location } }));
+  }
+
+  async function search(postcode){
+    resultsBox.innerHTML = `<div class="cnc-loader">Checking stock…</div>`;
+    try{
+      const res = await fetch(`${API_BASE}/api/pickup`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          pincode: String(postcode||'').trim(),
+          variantId: "46578436571392",
+          radiusKm: 100
+        })
+      });
+      if(!res.ok) throw new Error('Network error');
+      const data = await res.json();
+      renderResults(data);
+    }catch(e){
+      resultsBox.innerHTML = `<div class="cnc-error">Unable to fetch stock. Please try again.</div>`;
+      console.error(e);
+    }
+  }
+
+  searchBtn.addEventListener('click', ()=> search(postcodeInput.value));
+  postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') search(postcodeInput.value); });
+
+  // (optional) listen to selection elsewhere
+  // window.addEventListener('cnc:pickupSelected', (e)=> console.log('Selected location:', e.detail.location));
+})();
+</script>
