@@ -249,35 +249,26 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   const savedPC  = readSavedPostcode() || deriveZipFromSaved(savedSel) || postcodeInput.value || '';
   if (savedPC) postcodeInput.value = savedPC;
 
-deliveryMethods.forEach(m=>{
-  m.addEventListener('click', async ()=>{
-    deliveryMethods.forEach(x=>x.classList.remove('active'));
-    m.classList.add('active');
-    selectedMethod = m.dataset.method;
+  deliveryMethods.forEach(m=>{
+    m.addEventListener('click', async ()=>{
+      deliveryMethods.forEach(x=>x.classList.remove('active'));
+      m.classList.add('active');
+      selectedMethod=m.dataset.method;
 
-    if (selectedMethod === 'delivery') {
-      await removePickupMeta();                  // keep cart clean of pickup meta
-      selectedLocation = null;
-
-      setCheckoutEnabled(true);                  // ⭐ ENABLE checkout for Home Delivery
-      locationSection.classList.remove('active');
-
-      // optional UI cleanup
-      document.querySelectorAll('.location-item').forEach(el=>{
-        el.classList.remove('selected','is-open');
-        el.querySelector('.cnc-radio')?.checked = false;
-        el.querySelector('.cnc-caret-btn')?.setAttribute('aria-expanded','false');
-      });
-    } else {
-      // Back to Click & Collect → require a valid store to enable checkout
-      locationSection.classList.add('active');
-      const canCheckout =
-        !!selectedLocation && /instock|in_stock/i.test(String(selectedLocation.status||''));
-      setCheckoutEnabled(canCheckout);           // ⭐ disable until a valid C&C store
-    }
+      if(selectedMethod==='delivery'){
+        await removePickupMeta();
+        selectedLocation=null;
+        setCheckoutEnabled(false);
+        document.querySelectorAll('.location-item').forEach(el=>{
+          el.classList.remove('selected','is-open');
+          const r=el.querySelector('.cnc-radio'); if(r) r.checked=false;
+        });
+        locationSection.classList.remove('active');
+      }else{
+        locationSection.classList.add('active');
+      }
+    });
   });
-});
-
 
   searchButton.addEventListener('click', onSearch);
   postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSearch(); });
