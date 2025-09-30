@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Click & Collect – with stock validation</title>
+<title>Click & Collect – stock check on checkout</title>
 <style>
   .cart__ctas { display: none; }
   *{margin:0;padding:0;box-sizing:border-box}
@@ -113,7 +113,7 @@
 <script>
 /* ======== CONFIG ======== */
 const PICKUP_API          = "https://6d63ab86a3e8.ngrok-free.app/api/pickup";
-let   VARIANT_ID          = null;                  // set to string id to force a specific variant; keep null to auto-detect
+let   VARIANT_ID          = null;                  // set to "1234567890" to lock validation to a specific variant
 const PICKUP_META_VARIANT = "46950237503744";
 
 /* ======== STORAGE KEYS ======== */
@@ -134,7 +134,6 @@ const qtyErrorEl      = document.getElementById('qty-error');
 let selectedMethod   = 'collect';
 let selectedLocation = null;
 let customerCoords   = null;
-let lastResults      = [];
 
 /* ======== UTILS ======== */
 const escapeHTML = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -163,8 +162,6 @@ function persistSelection(location){
     const payload = {
       id: location.id || location.raw?.locationId || null,
       name: location.name,
-      distance: location.distance,
-      status: location.status,
       available: Number(location.available ?? 0),
       address: location.address,
       raw: location.raw ?? null
@@ -212,7 +209,7 @@ async function getLiveCart(){
     return { items: [] };
   }
 }
-
+// choose which variant to validate: configured id or first non-meta line
 async function getTargetVariantId(){
   if (VARIANT_ID) return String(VARIANT_ID);
   const cart = await getLiveCart();
@@ -251,36 +248,6 @@ async function addOrUpdatePickupMeta(location){
   finally{ addingPickupMeta=false; }
 }
 
-/* ======== VALIDATION ======== */
-async function validateQtyAgainstLocation(location){
-  try{
-    const cart        = await getLiveCart();
-    const targetVid   = await getTargetVariantId();
-    if (!targetVid){
-      showQtyError("");
-      setCheckoutEnabled(true);
-      return true;
-    }
-    const cartQty     = qtyForVariant(cart, targetVid);
-    const available   = Number(location?.available ?? 0);
-
-    if (cartQty > available){
-      showQtyError(`Selected location "${location.name}" has only ${available} in stock. Reduce quantity to ${available} or choose another location.`);
-      setCheckoutEnabled(false);
-      return false;
-    }else{
-      showQtyError("");
-      setCheckoutEnabled(true);
-      return true;
-    }
-  }catch(e){
-    console.error('validate error', e);
-    showQtyError("Unable to validate stock at the selected location. Please try again.");
-    setCheckoutEnabled(false);
-    return false;
-  }
-}
-
 /* ======== GEO ======== */
 function getCustomerLocation(){
   return new Promise(resolve=>{
@@ -296,11 +263,10 @@ function getCustomerLocation(){
 /* ======== INIT ======== */
 document.addEventListener('DOMContentLoaded', async ()=>{
   await removePickupMeta();
-  customerCoords=await getCustomerLocation();
-
   const savedSel = readSavedSelection();
   const savedPC  = readSavedPostcode() || deriveZipFromSaved(savedSel) || postcodeInput.value || '';
   if (savedPC) postcodeInput.value = savedPC;
+  customerCoords=await getCustomerLocation();
 
   deliveryMethods.forEach(m=>{
     m.addEventListener('click', async ()=>{
@@ -314,13 +280,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         setCheckoutEnabled(false);
         document.querySelectorAll('.location-item').forEach(el=>{
           el.classList.remove('selected','is-open');
-          const r=el.querySelector('.cnc-radio'); if(r) r.checked=false;
+          el.querySelector('.cnc-radio')?.checked && (el.querySelector('.cnc-radio').checked=false);
         });
         locationSection.classList.remove('active');
         showQtyError("");
       }else{
         locationSection.classList.add('active');
-        if (selectedLocation) await validateQtyAgainstLocation(selectedLocation);
       }
     });
   });
@@ -328,20 +293,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   searchButton.addEventListener('click', onSearch);
   postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSearch(); });
 
-  checkoutButton.addEventListener('click', async (e)=>{
-    if (selectedMethod==='collect' && selectedLocation){
-      const ok = await validateQtyAgainstLocation(selectedLocation);
-      if (!ok){
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-    }
-    window.location.href='/checkout';
-  });
-
-  // attach listeners for qty changes
-  attachCartQtyListeners();
+  // ✅ Validate strictly on checkout click based on CURRENT selected row
+  checkoutButton.addEventListener('click', onCheckoutClick);
 
   locationSection.classList.add('active');
   if (savedPC) {
@@ -351,6 +304,41 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
 window.addEventListener('pageshow', async ()=>{ await removePickupMeta(); });
 document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible'){ await removePickupMeta(); }});
+
+/* ======== CHECKOUT CLICK VALIDATION ======== */
+async function onCheckoutClick(e){
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (selectedMethod === 'collect') {
+    const row = document.querySelector('.location-item.selected');
+    if (!row){
+      showQtyError("Please choose a pickup location first.");
+      setCheckoutEnabled(false);
+      return;
+    }
+
+    // get selected location's available & name from dataset
+    const locName   = row.dataset.name || 'Selected location';
+    const available = Number(row.dataset.available || 0);
+
+    // live cart + target variant qty
+    const cart  = await getLiveCart();
+    const vid   = await getTargetVariantId();
+    const qty   = vid ? qtyForVariant(cart, vid) : 0;
+
+    if (qty > available){
+      showQtyError(`"${locName}" par sirf ${available} available hai. Aapke cart me ${qty} items hain. Qty kam karo ya doosri location choose karo.`);
+      setCheckoutEnabled(false);
+      return; // block checkout
+    }
+  }
+
+  // ok to proceed
+  showQtyError("");
+  setCheckoutEnabled(true);
+  window.location.href='/checkout';
+}
 
 /* ======== SEARCH / RENDER ======== */
 async function onSearch(){
@@ -389,14 +377,12 @@ async function loadPickup(pincode, preferredId=null){
         id:loc.locationId||loc.id,
         name:loc.name,
         distance:dist,
-        status:String(loc.status||'').toLowerCase(),
         available,
         address:{formatted},
         raw:loc
       };
     });
 
-    lastResults = list;
     renderLocations(list, preferredId);
   }catch(err){
     console.error(err);
@@ -415,17 +401,10 @@ function renderLocations(list, preferredId=null){
 
   if (preferredId){
     const match = locationsList.querySelector(`.location-item[data-location-id="${CSS.escape(preferredId)}"]`);
-    if (match){
-      const select = match.querySelector('[data-select]');
-      if (select) select.click();
-      return;
-    }
+    if (match){ match.querySelector('[data-select]')?.click(); return; }
   }
   const first = locationsList.querySelector('.location-item');
-  if (first){
-    const select = first.querySelector('[data-select]');
-    if (select) select.click();
-  }
+  if (first){ first.querySelector('[data-select]')?.click(); }
 }
 
 function locationRow(location){
@@ -435,6 +414,9 @@ function locationRow(location){
 
   div.className='location-item';
   div.dataset.locationId=location.id;
+  // ⬇️ store for checkout-time validation
+  div.dataset.available = Number(location.available ?? 0);
+  div.dataset.name = location.name;
 
   div.innerHTML=`
     <div class="cnc-row">
@@ -470,11 +452,20 @@ function locationRow(location){
     div.classList.add('selected','is-open');
     caret.setAttribute('aria-expanded','true');
 
-    selectedLocation=location;
-    persistSelection(location);
+    selectedLocation = {
+      id: location.id,
+      name: location.name,
+      available: Number(location.available ?? 0),
+      address: location.address,
+      raw: location.raw
+    };
+    persistSelection(selectedLocation);
 
-    await addOrUpdatePickupMeta(location);
-    await validateQtyAgainstLocation(location); // <-- only validator decides button state
+    await addOrUpdatePickupMeta(selectedLocation);
+
+    // checkout state is controlled at click-time; keep button enabled for UX
+    setCheckoutEnabled(true);
+    showQtyError("");
   });
 
   caret.addEventListener('click',e=>{
@@ -489,44 +480,6 @@ function locationRow(location){
   });
 
   return div;
-}
-
-/* ======== QTY CHANGE LISTENERS ======== */
-function attachCartQtyListeners(){
-  const debounced = (()=>{ let t; return (fn)=>{ clearTimeout(t); t=setTimeout(fn, 400); }; })();
-
-  const onQtyChange = ()=>{
-    if (selectedLocation){
-      debounced(()=> validateQtyAgainstLocation(selectedLocation));
-    }
-  };
-
-  document.addEventListener('change', (e)=>{
-    const el = e.target;
-    if (!el) return;
-    if (
-      el.matches('input[name="updates[]"]') || 
-      el.matches('input[name="quantity"]')  ||
-      el.matches('input[type="number"][data-ajax-cart-quantity]')
-    ){
-      onQtyChange();
-    }
-  });
-
-  document.addEventListener('click', (e)=>{
-    const el = e.target.closest('button, a');
-    if (!el) return;
-    if (
-      el.matches('[name="minus"]') || el.matches('[name="plus"]') ||
-      el.matches('[data-ajax-cart-increment]') || el.matches('[data-ajax-cart-decrement]') ||
-      el.matches('[data-quantity-plus]') || el.matches('[data-quantity-minus]')
-    ){
-      onQtyChange();
-    }
-  });
-
-  const obs = new MutationObserver(()=>{ if (selectedLocation) validateQtyAgainstLocation(selectedLocation); });
-  obs.observe(document.body, { subtree:true, childList:true });
 }
 </script>
 
