@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Click & Collect – Dropdown + One-time Cart Add</title>
+<title>Click & Collect – Dropdown + One-time Cart Add + Cleanup</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:#f8f9fa;color:#111;line-height:1.6;padding:20px}
@@ -30,6 +30,7 @@
 
   .location-item{padding:12px 0;border-bottom:1px solid #e9eef2}
   .location-item.selected{background:#f7fffb;border-top:1px solid #01AF67;border-bottom:1px solid #01AF67}
+
   .cnc-row{display:flex;align-items:center;gap:10px}
   .cnc-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
   .cnc-right{display:flex;align-items:center;gap:10px}
@@ -148,6 +149,61 @@ function setCheckoutEnabled(on){
 }
 function showLoading(on){ loading.classList.toggle('hidden', !on); }
 
+/* =================== CART HELPERS (Shopify) =================== */
+async function removePickupMeta(){
+  try{
+    const cart = await fetch('/cart.js', {credentials:'same-origin'}).then(r=>r.json());
+    const updates = {};
+    (cart.items||[]).forEach(i => { if (String(i.variant_id) === PICKUP_META_VARIANT) updates[i.key] = 0; });
+    if (Object.keys(updates).length){
+      await fetch('/cart/update.js', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({ updates })
+      });
+      console.log('[pickup] meta line REMOVED');
+    }
+  }catch(e){ console.error('[pickup] remove error', e); }
+}
+
+let addingPickupMeta = false;
+async function addOrUpdatePickupMeta(location){
+  if (addingPickupMeta) return;
+  addingPickupMeta = true;
+  try{
+    const cart = await fetch('/cart.js', {credentials:'same-origin'}).then(r=>r.json());
+    let existing = null;
+    (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===PICKUP_META_VARIANT) existing=i; });
+
+    const props = {
+      'Pickup Location': location.name,
+      'Location ID': location.id || location.raw?.locationId || '',
+      'Address': (location.address?.formatted||[]).join(', '),
+      '__pickup_meta':'true'
+    };
+
+    if(!existing){
+      await fetch('/cart/add.js', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({ id: PICKUP_META_VARIANT, quantity: 1, properties: props })
+      }).then(r=>r.json());
+      console.log('[pickup] meta line ADDED');
+    }else{
+      await fetch('/cart/change.js', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({ id: existing.key, quantity: 1, properties: props })
+      }).then(r=>r.json());
+      console.log('[pickup] meta line UPDATED');
+    }
+  }catch(e){ console.error('[pickup] add/update error', e); }
+  finally{ addingPickupMeta = false; }
+}
+
 /* =================== GEO =================== */
 function getCustomerLocation(){
   return new Promise(resolve=>{
@@ -164,16 +220,31 @@ function getCustomerLocation(){
 
 /* =================== INIT =================== */
 document.addEventListener('DOMContentLoaded', async ()=>{
+  // Clean any stale pickup meta when entering the cart page
+  await removePickupMeta();
+
   customerCoords = await getCustomerLocation();
 
+  // Delivery method switches
   deliveryMethods.forEach(m=>{
-    m.addEventListener('click', ()=>{
+    m.addEventListener('click', async ()=>{
       deliveryMethods.forEach(x=>x.classList.remove('active'));
       m.classList.add('active');
       selectedMethod = m.dataset.method;
-      selectedLocation = null;
-      setCheckoutEnabled(false);
-      locationsList.innerHTML = '';
+
+      // If switching to Home Delivery, remove pickup meta & reset UI
+      if (selectedMethod === 'delivery') {
+        await removePickupMeta();
+        selectedLocation = null;
+        setCheckoutEnabled(false);
+        // collapse & uncheck radios
+        document.querySelectorAll('.location-item').forEach(el=>{
+          el.classList.remove('selected','is-open');
+          el.querySelector('.cnc-radio')?.checked && (el.querySelector('.cnc-radio').checked = false);
+        });
+      }
+
+      // Show/hide section
       if(selectedMethod==='collect'){
         locationSection.classList.add('active');
       }else{
@@ -185,9 +256,19 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   searchButton.addEventListener('click', onSearch);
   postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSearch(); });
 
-  // start with the section visible
+  // Checkout click: (optional) remove meta before navigating to checkout
+  checkoutButton.addEventListener('click', async ()=>{
+    await removePickupMeta();
+    // navigate to checkout — replace if your theme handles this differently
+    window.location.href = '/checkout';
+  });
+
+  // show section initially
   locationSection.classList.add('active');
 });
+
+// When user returns from checkout/back button (bfcache or new load), clean again
+window.addEventListener('pageshow', async ()=>{ await removePickupMeta(); });
 
 /* =================== SEARCH =================== */
 async function onSearch(){
@@ -290,7 +371,6 @@ function locationRow(location){
     selectedLocation = location;
     setCheckoutEnabled(inStock);
 
-    // add/update cart meta line (Shopify)
     await addOrUpdatePickupMeta(location);
   });
 
@@ -307,48 +387,6 @@ function locationRow(location){
   });
 
   return div;
-}
-
-/* =================== ONE-TIME ADD / UPDATE CART (Shopify) =================== */
-let addingPickupMeta = false;
-async function addOrUpdatePickupMeta(location){
-  // If you're not on Shopify, you can remove this whole function.
-  if (addingPickupMeta) return;
-  addingPickupMeta = true;
-  try{
-    const cart = await fetch('/cart.js', {credentials:'same-origin'}).then(r=>r.json());
-    let existing = null;
-    (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===PICKUP_META_VARIANT) existing=i; });
-
-    const props = {
-      'Pickup Location': location.name,
-      'Location ID': location.id || location.raw?.locationId || '',
-      'Address': (location.address?.formatted||[]).join(', '),
-      '__pickup_meta':'true'
-    };
-
-    if(!existing){
-      await fetch('/cart/add.js', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body: JSON.stringify({ id: PICKUP_META_VARIANT, quantity: 1, properties: props })
-      }).then(r=>r.json());
-      console.log('[pickup] meta line ADDED');
-    }else{
-      await fetch('/cart/change.js', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body: JSON.stringify({ id: existing.key, quantity: 1, properties: props })
-      }).then(r=>r.json());
-      console.log('[pickup] meta line UPDATED');
-    }
-  }catch(e){
-    console.error('[pickup] add/update error', e);
-  }finally{
-    addingPickupMeta = false;
-  }
 }
 </script>
 </body>
