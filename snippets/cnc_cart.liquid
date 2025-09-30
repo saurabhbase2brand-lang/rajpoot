@@ -266,6 +266,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         locationSection.classList.remove('active');
       }else{
         locationSection.classList.add('active');
+        document.querySelector('button#checkout').classList.remove('disabled');
       }
     });
   });
