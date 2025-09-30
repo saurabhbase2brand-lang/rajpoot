@@ -328,7 +328,7 @@ async function onCheckoutClick(e){
   const qty  = vid ? qtyForVariant(cart, vid) : 0;
 
   if (qty > available){
-    showQtyError(`"${locName}" par sirf ${available} available hai. Aapke cart me ${qty} items hain. Qty kam karein ya doosri location choose karein.`);
+    showQtyError(`Only ${available} available at "${locName}". You have ${qty} items in your cart. Please reduce the quantity or choose another location.`);
     setCheckoutEnabled(false);
     return; // block checkout
   }
