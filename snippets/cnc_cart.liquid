@@ -3,61 +3,67 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Click & Collect – One-time Cart Add</title>
+<title>Click & Collect – Dropdown + One-time Cart Add</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif; background:#f8f9fa; color:#333; line-height:1.6; padding:20px; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:#f8f9fa;color:#111;line-height:1.6;padding:20px}
 
-  .delivery-container{ max-width:500px; margin:0 auto; background:#fff; border:1px solid #01AF67; }
-  .delivery-header{ padding:20px; border-bottom:1px solid #e1e8ed; }
-  .delivery-title{ font-size:16px; font-weight:600; color:#000; margin-bottom:16px; }
-  .delivery-methods{ display:flex; gap:12px; margin-bottom:20px; }
-  .delivery-method{ cursor:pointer; font-size:15px; font-weight:600; color:#000; display:flex; align-items:center; gap:9px; }
-  .delivery-method svg{ width:22px; height:22px; }
-  .delivery-method.active svg{ fill:#01AF67; stroke:#01AF67; }
-  .delivery-method.active span{ color:#01AF67; }
+  .delivery-container{max-width:520px;margin:0 auto;background:#fff;border:1px solid #01AF67;border-radius:6px;overflow:hidden}
+  .delivery-header{padding:20px;border-bottom:1px solid #e1e8ed}
+  .delivery-title{font-size:16px;font-weight:700;margin-bottom:16px}
 
-  .postcode-section{ margin-bottom:20px; }
-  .postcode-label{ font-size:16px; margin-bottom:8px; font-weight:400; color:#000; }
-  .postcode-input-container{ display:flex; gap:0; }
-  .postcode-input{ border-radius:0; border:1px solid #E1E1E1; border-right:none; width:calc(100% - 48px); height:46px; font-size:15px; color:#111; padding:10px 20px; }
-  .postcode-input:focus{ outline:none; box-shadow:none; }
-  .search-button{ background:#01AF67; color:#fff; border:none; padding:14px 18px; border-radius:0; cursor:pointer; min-width:50px; display:grid; place-items:center; }
-  .search-button:hover{ background:#0b9a5c; }
+  .delivery-methods{display:flex;gap:12px;margin-bottom:20px}
+  .delivery-method{display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;color:#0f172a}
+  .delivery-method svg{width:22px;height:22px}
+  .delivery-method.active span,.delivery-method.active svg{color:#01AF67;fill:#01AF67}
 
-  .location-section{ padding:20px; display:none; }
-  .location-section.active{ display:block; }
-  .location-selection-label{ margin:0 0 16px; color:#000; }
+  .postcode-section{margin-bottom:8px}
+  .postcode-label{font-size:15px;margin-bottom:8px}
+  .postcode-input-container{display:flex}
+  .postcode-input{flex:1;height:46px;border:1px solid #E1E1E1;border-right:none;padding:0 14px;font-size:15px}
+  .search-button{min-width:50px;border:none;background:#01AF67;color:#fff;display:grid;place-items:center;padding:0 14px;cursor:pointer}
+  .search-button:hover{background:#0b9a5c}
 
-  .location-item{ background:#fff; border-top:1px solid #e1e8ed; border-bottom:1px solid #e9eef2; padding:12px; cursor:pointer; }
-  .location-item + .location-item{ margin-top:6px; }
-  .location-item.selected{ border-color:#01AF67; background:#f8fffb; }
+  .location-section{padding:14px 20px 8px 20px;display:none;border-top:1px solid #e1e8ed}
+  .location-section.active{display:block}
+  .location-selection-label{font-weight:600;margin:6px 0 14px 0;color:#111}
 
-  .sdev-location-header{ display:flex; justify-content:space-between; align-items:flex-end; }
-  .sdev-location-name{ font-weight:700; font-size:15px; line-height:21px; color:#000; display:flex; align-items:center; gap:8px; }
-  .sdev-location-name:before{ border:1px solid #E4E4E4; content:""; width:20px; height:20px; display:inline-block; border-radius:50%; margin-right:8px; }
-  .location-item.selected .sdev-location-name:before{ border:6px solid #01AF67; }
-  .sdev-location-distance{ margin-left:8px; color:#6b7280; font-weight:600; }
+  .location-item{padding:12px 0;border-bottom:1px solid #e9eef2}
+  .location-item.selected{background:#f7fffb;border-top:1px solid #01AF67;border-bottom:1px solid #01AF67}
+  .cnc-row{display:flex;align-items:center;gap:10px}
+  .cnc-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+  .cnc-right{display:flex;align-items:center;gap:10px}
 
-  .addressed_click_cmt{ display:flex; align-items:center; justify-content:space-between; gap:0; }
-  .sdev-location-address{ color:#000; padding:12px 0; display:none; line-height:1.4; }
-  .location-item.selected .sdev-location-address{ display:block; }
+  /* custom radio */
+  .cnc-radio{appearance:none;-webkit-appearance:none;inline-size:18px;block-size:18px;border:2px solid #cbd5e1;border-radius:999px;display:inline-grid;place-items:center;cursor:pointer;flex:0 0 auto}
+  .cnc-radio:checked{border-color:#01AF67}
+  .cnc-radio:checked::after{content:"";inline-size:10px;block-size:10px;background:#01AF67;border-radius:999px}
 
-  .sdev-stock-status{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; color:#01AF67; }
-  .sdev-stock-status.out-of-stock{ color:#e74c3c; }
-  .sdev-stock-indicator{ width:8px; height:8px; border-radius:50%; background:#01AF67; }
-  .sdev-stock-status.out-of-stock .sdev-stock-indicator{ background:#e74c3c; }
+  .cnc-name{font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cnc-distance{margin-left:6px;color:#6b7280;font-size:13px;white-space:nowrap}
+  .cnc-badge{margin-left:8px;font-size:13px;font-weight:700;white-space:nowrap}
+  .cnc-badge.cnc-in{color:#01AF67}
+  .cnc-badge.cnc-out{color:#e74c3c}
 
-  .loading{ text-align:center; padding:40px 20px; color:#7f8c8d; }
-  .loading.hidden{ display:none; }
-  .spinner{ width:40px; height:40px; border:4px solid #ecf0f1; border-top:4px solid #3498db; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 16px; }
-  @keyframes spin{ 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
-  .error-message{ text-align:center; padding:20px; color:#e74c3c; background:#fdf2f2; border:1px solid #f5c6cb; }
-  .no-results{ text-align:center; padding:20px; color:#7f8c8d; }
+  .cnc-caret-btn{border:0;background:transparent;cursor:pointer;width:24px;height:24px;display:inline-grid;place-items:center}
+  .cnc-caret{width:14px;height:14px;transition:transform .18s ease}
+  .location-item.is-open .cnc-caret{transform:rotate(180deg)}
 
-  .checkout-section{ padding:20px; text-align:center; }
-  .checkout-button{ width:100%; background:#111; color:#fff; border:none; padding:14px; font-size:15px; font-weight:600; cursor:pointer; }
-  .checkout-button.disabled{ opacity:.6; cursor:not-allowed; }
+  /* dropdown address (accordion) */
+  .sdev-location-address{color:#111;padding:8px 28px 6px 28px;line-height:1.45;overflow:hidden;max-height:0;transition:max-height .22s ease}
+  .location-item.is-open .sdev-location-address{max-height:220px}
+
+  .loading{text-align:center;padding:28px 0;color:#6b7280}
+  .loading.hidden{display:none}
+  .spinner{width:36px;height:36px;border:4px solid #ecf0f1;border-top:4px solid #3498db;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+  @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+
+  .no-results,.error-message{text-align:center;color:#6b7280;padding:16px 0}
+  .error-message{color:#e74c3c}
+
+  .checkout-section{padding:16px 20px;border-top:1px solid #e1e8ed}
+  .checkout-button{width:100%;background:#111;color:#fff;border:none;padding:14px;font-weight:700;cursor:pointer;border-radius:4px}
+  .checkout-button.disabled{opacity:.6;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -68,177 +74,150 @@
 
     <div class="delivery-methods">
       <div class="delivery-method click-collect active" data-method="collect">
-        <span class="icon">
-          <svg fill="#000" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><path d="M496.395 150.997 261.728 1.664a10.667 10.667 0 0 0-11.456 0L15.605 150.997A10.667 10.667 0 0 0 10.677 160v341.333c0 5.888 4.779 10.667 10.667 10.667h469.333c5.888 0 10.667-4.779 10.645-10.667V160c-.018-3.648-1.895-7.04-4.967-9.003zM309.344 490.667H202.677V416c0-29.397 23.936-53.333 53.333-53.333s53.333 23.936 53.333 53.333zM480.011 490.667H32.011V165.845l224-142.549 224 142.549z"/></svg>
-        </span>
+        <svg viewBox="0 0 512 512"><path d="M496.395 150.997 261.728 1.664a10.667 10.667 0 0 0-11.456 0L15.605 150.997A10.667 10.667 0 0 0 10.677 160v341.333c0 5.888 4.779 10.667 10.667 10.667h469.333c5.888 0 10.667-4.779 10.645-10.667V160c-.018-3.648-1.895-7.04-4.967-9.003zM309.344 490.667H202.677V416c0-29.397 23.936-53.333 53.333-53.333s53.333 23.936 53.333 53.333zM480.011 490.667H32.011V165.845l224-142.549 224 142.549z"/></svg>
         <span>Click & Collect</span>
       </div>
-
       <div class="delivery-method home-delivery" data-method="delivery">
-        <span class="icon">
-          <svg fill="#000" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><path d="M53.336 0a10.833 10.833 0 0 0-9.899 6.699L.771 113.365A10.666 10.666 0 0 0 10.67 128h10.667v373.333c0 5.888 4.779 10.667 10.667 10.667h448c5.888 0 10.667-4.779 10.667-10.667V128h10.667a10.667 10.667 0 0 0 8.832-4.693 10.67 10.67 0 0 0 .405-9.942L468.568 6.699A10.667 10.667 0 0 0 458.67 0zm245.334 490.667h-85.333V384h85.333zM469.336 490.667H320.003V373.333c0-5.888-4.779-10.667-10.667-10.667H202.67c-5.888 0-10.667 4.779-10.667 10.667v117.333H42.67V128h426.667zM26.414 106.667l34.133-85.333h390.891l34.133 85.333z"/></svg>
-        </span>
+        <svg viewBox="0 0 512 512"><path d="M53.336 0a10.833 10.833 0 0 0-9.899 6.699L.771 113.365A10.666 10.666 0 0 0 10.67 128h10.667v373.333c0 5.888 4.779 10.667 10.667 10.667h448c5.888 0 10.667-4.779 10.667-10.667V128h10.667a10.667 10.667 0 0 0 8.832-4.693 10.67 10.67 0 0 0 .405-9.942L468.568 6.699A10.667 10.667 0 0 0 458.67 0zm245.334 490.667h-85.333V384h85.333zM469.336 490.667H320.003V373.333c0-5.888-4.779-10.667-10.667-10.667H202.67c-5.888 0-10.667 4.779-10.667 10.667v117.333H42.67V128h426.667zM26.414 106.667l34.133-85.333h390.891l34.133 85.333z"/></svg>
         <span>Home Delivery</span>
       </div>
     </div>
 
-    <!-- Postcode Input -->
-    <div class="postcode-section" id="postcode-section">
+    <div class="postcode-section">
       <div class="postcode-label" id="postcode-label">Search for a location to pick up your order:</div>
       <div class="postcode-input-container">
-        <input type="text" class="postcode-input" placeholder="Enter Postcode" maxlength="6" id="postcode-input" value="400001">
-        <button class="search-button" id="search-button" aria-label="Search">
-          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+        <input id="postcode-input" class="postcode-input" type="text" placeholder="Enter Postcode" maxlength="10" value="400001"/>
+        <button id="search-button" class="search-button" aria-label="Search">
+          <svg viewBox="0 0 512 512" width="18" height="18"><path fill="currentColor" d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"/></svg>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Results -->
-  <div>
-    <div class="location-section" id="location-section">
-      <div id="loading" class="loading hidden">
-        <div class="spinner"></div>
-        <p>Loading stock information...</p>
-      </div>
-
-      <div class="location-selection-label">Please choose a pickup location:</div>
-      <div id="locations-list"></div>
+  <div class="location-section" id="location-section">
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+      <p>Loading stock information…</p>
     </div>
+    <div class="location-selection-label">Please choose a pickup location:</div>
+    <div id="locations-list"></div>
+  </div>
 
-    <div class="checkout-section">
-      <button class="checkout-button" id="checkout">Check out</button>
-    </div>
+  <div class="checkout-section">
+    <button id="checkout" class="checkout-button disabled" disabled>Check out</button>
   </div>
 </div>
 
 <script>
 /* =================== CONFIG =================== */
 const PICKUP_API          = "http://localhost:3000/api/pickup"; // your pickup API
-const VARIANT_ID          = "46578436571392";                    // used in pickup API payload
-const PICKUP_META_VARIANT = "46950237503744";                    // dummy variant to carry pickup info
+const VARIANT_ID          = "46578436571392";                    // variant for availability lookup
+const PICKUP_META_VARIANT = "46950237503744";                    // dummy variant to carry pickup info (Shopify)
 
 /* =================== DOM =================== */
-const deliveryMethods  = document.querySelectorAll('.delivery-method');
-const postcodeLabel    = document.getElementById('postcode-label');
-const postcodeInput    = document.getElementById('postcode-input');
-const searchButton     = document.getElementById('search-button');
-const locationSection  = document.getElementById('location-section');
-const loading          = document.getElementById('loading');
-const locationsList    = document.getElementById('locations-list');
-const checkoutButton   = document.getElementById('checkout');
+const deliveryMethods = document.querySelectorAll('.delivery-method');
+const postcodeInput   = document.getElementById('postcode-input');
+const searchButton    = document.getElementById('search-button');
+const locationSection = document.getElementById('location-section');
+const locationsList   = document.getElementById('locations-list');
+const loading         = document.getElementById('loading');
+const checkoutButton  = document.getElementById('checkout');
 
 /* =================== STATE =================== */
-let selectedMethod     = 'collect';
-let selectedLocation   = null;     // stores full selected location object
-let hasSearched        = false;
-let customerCoords     = null;
+let selectedMethod   = 'collect';
+let selectedLocation = null;
+let customerCoords   = null;
 
 /* =================== HELPERS =================== */
-function escapeHTML(s){ return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
-function formatAddress(addr){
-  const line1 = [addr?.address1, addr?.address2].filter(Boolean).join(', ');
-  const line2 = [addr?.city, addr?.province].filter(Boolean).join(', ');
-  const line3 = [addr?.country, addr?.zip].filter(Boolean).join(' - ');
-  return [line1, line2, line3].filter(Boolean);
+const escapeHTML = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+function formatAddress(a){
+  const line1 = [a?.address1, a?.address2].filter(Boolean).join(', ');
+  const line2 = [a?.city, a?.province].filter(Boolean).join(', ');
+  const line3 = [a?.country, a?.zip].filter(Boolean).join(' - ');
+  return [line1,line2,line3].filter(Boolean);
 }
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  if ([lat1, lon1, lat2, lon2].some(v => v == null)) return null;
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 +
-            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
-            Math.sin(dLon/2)**2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return +(R*c).toFixed(2);
+function calculateDistance(lat1, lon1, lat2, lon2){
+  if ([lat1, lon1, lat2, lon2].some(v=>v==null)) return null;
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return +(2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(2);
 }
-async function getCustomerLocation() {
-  return new Promise((resolve) => {
-    if (navigator.geolocation) {
+function setCheckoutEnabled(on){
+  checkoutButton.classList.toggle('disabled', !on);
+  checkoutButton.disabled = !on;
+}
+function showLoading(on){ loading.classList.toggle('hidden', !on); }
+
+/* =================== GEO =================== */
+function getCustomerLocation(){
+  return new Promise(resolve=>{
+    if(navigator.geolocation){
       navigator.geolocation.getCurrentPosition(
-        pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-        ()  => resolve({ latitude: 30.7333, longitude: 76.7794 }) // fallback
+        pos=>resolve({latitude:pos.coords.latitude, longitude:pos.coords.longitude}),
+        ()=>resolve({latitude:30.7333, longitude:76.7794})
       );
-    } else {
-      resolve({ latitude: 30.7333, longitude: 76.7794 });
+    }else{
+      resolve({latitude:30.7333, longitude:76.7794});
     }
   });
 }
 
 /* =================== INIT =================== */
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', async ()=>{
   customerCoords = await getCustomerLocation();
-  bindUI();
-});
 
-/* =================== UI & EVENTS =================== */
-function bindUI(){
-  deliveryMethods.forEach(method => {
-    method.addEventListener('click', () => {
-      deliveryMethods.forEach(m => m.classList.remove('active'));
-      method.classList.add('active');
-      selectedMethod = method.dataset.method;
-      hasSearched = false;
+  deliveryMethods.forEach(m=>{
+    m.addEventListener('click', ()=>{
+      deliveryMethods.forEach(x=>x.classList.remove('active'));
+      m.classList.add('active');
+      selectedMethod = m.dataset.method;
       selectedLocation = null;
+      setCheckoutEnabled(false);
       locationsList.innerHTML = '';
-      locationSection.classList.remove('active');
+      if(selectedMethod==='collect'){
+        locationSection.classList.add('active');
+      }else{
+        locationSection.classList.remove('active');
+      }
     });
   });
 
   searchButton.addEventListener('click', onSearch);
-  postcodeInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') onSearch(); });
+  postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSearch(); });
 
-  // checkout button disabled until a location is selected
-  setCheckoutEnabled(false);
-}
+  // start with the section visible
+  locationSection.classList.add('active');
+});
 
-function setCheckoutEnabled(on){
-  checkoutButton.classList.toggle('disabled', !on);
-  checkoutButton.disabled = !on;
-}
-
+/* =================== SEARCH =================== */
 async function onSearch(){
   const postcode = postcodeInput.value.trim();
-  if (!postcode) { alert('Please enter a postcode'); return; }
-
-  if (selectedMethod !== 'collect') {
-    alert('Switch to Click & Collect to search pickup locations.');
-    return;
-  }
-
-  hasSearched = true;
-  locationSection.classList.add('active');
+  if(!postcode){ alert('Please enter a postcode'); return; }
+  if(selectedMethod!=='collect'){ alert('Switch to Click & Collect to search pickup locations.'); return; }
   await loadPickup(postcode);
 }
 
-/* =================== API =================== */
-async function loadPickup(postcode){
+async function loadPickup(pincode){
   showLoading(true);
+  setCheckoutEnabled(false);
+  selectedLocation = null;
+  locationsList.innerHTML = '';
   try{
     const res = await fetch(PICKUP_API, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ pincode: postcode, variantId: VARIANT_ID, radiusKm: 100 })
+      body: JSON.stringify({ pincode, variantId: VARIANT_ID, radiusKm: 100 })
     });
     if(!res.ok) throw new Error('Pickup API error');
     const data = await res.json();
-
-    const merged = [...(data.inRadius || []), ...(data.outOfRadius || [])].map(loc => {
+    const merged = [...(data.inRadius||[]), ...(data.outOfRadius||[])].map(loc=>{
       const formatted = formatAddress(loc.address);
-      const dist = typeof loc.distanceKm === 'number'
-        ? loc.distanceKm
-        : calculateDistance(
-            customerCoords?.latitude, customerCoords?.longitude,
-            loc.coordinates?.lat, loc.coordinates?.lng
-          );
+      const dist = typeof loc.distanceKm==='number' ? loc.distanceKm
+                  : calculateDistance(customerCoords?.latitude, customerCoords?.longitude, loc.coordinates?.lat, loc.coordinates?.lng);
       return {
-        id: loc.locationId,
-        name: loc.name,
-        address: { formatted },
-        distance: dist,
-        status: String(loc.status || '').toLowerCase(), // 'instock' or something else
-        raw: loc
+        id: loc.locationId, name: loc.name,
+        distance: dist, status: String(loc.status||'').toLowerCase(),
+        address:{formatted}, raw: loc
       };
     });
 
@@ -258,84 +237,97 @@ function renderLocations(list){
     locationsList.innerHTML = `<div class="no-results">No locations found for the entered postcode.</div>`;
     return;
   }
-
-  // Sort by distance if available
   list.sort((a,b)=>{
-    if (a.distance == null && b.distance == null) return 0;
-    if (a.distance == null) return 1;
-    if (b.distance == null) return -1;
-    return a.distance - b.distance;
+    if(a.distance==null && b.distance==null) return 0;
+    if(a.distance==null) return 1;
+    if(b.distance==null) return -1;
+    return a.distance-b.distance;
   });
-
-  list.forEach(loc => locationsList.appendChild(locationRow(loc)));
-  // do NOT auto-select; user must click to trigger add/update
+  list.forEach(loc=>locationsList.appendChild(locationRow(loc)));
 }
 
 function locationRow(location){
   const div = document.createElement('div');
   const inStock = /instock|in_stock/i.test(location.status);
-  const distanceStr = location.distance != null ? `${location.distance} km` : '';
+  const distanceStr = location.distance!=null ? `${location.distance} km` : '';
 
-  div.className = `location-item${inStock ? '' : ''}`; // keep class simple; out-of-stock styling on status pill
+  div.className = 'location-item';
   div.dataset.locationId = location.id;
 
   div.innerHTML = `
-    <div class="sdev-location-header">
-      <div class="sdev-location-name">
-        <div class="sdev-location-selector"></div>
-        ${escapeHTML(location.name)}
-        <span class="sdev-location-distance">${escapeHTML(distanceStr)}</span>
+    <div class="cnc-row">
+      <div class="cnc-left" data-select>
+        <input class="cnc-radio" type="radio" name="pickup-radio" aria-label="Select ${escapeHTML(location.name)}" />
+        <div class="cnc-name">${escapeHTML(location.name)}</div>
+        <div class="cnc-distance">${escapeHTML(distanceStr)}</div>
+        <div class="cnc-badge ${inStock?'cnc-in':'cnc-out'}">${inStock?'✓ In stock':'✖ Out of stock'}</div>
       </div>
-      <div class="sdev-stock-status ${inStock ? '' : 'out-of-stock'}">
-        <div class="sdev-stock-indicator"></div>
-        ${inStock ? 'In stock' : 'Out of stock'}
+      <div class="cnc-right">
+        <button class="cnc-caret-btn" type="button" aria-label="Toggle address" aria-expanded="false">
+          <svg class="cnc-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z" fill="#94a3b8"/></svg>
+        </button>
       </div>
     </div>
-    <div class="addressed_click_cmt">
-      <div class="sdev-location-address">${location.address.formatted.map(escapeHTML).join('<br>')}</div>
-    </div>
+    <div class="sdev-location-address">${location.address.formatted.map(escapeHTML).join('<br>')}</div>
   `;
 
-  div.addEventListener('click', async () => {
-    // select visual
-    document.querySelectorAll('.location-item').forEach(el => el.classList.remove('selected'));
-    div.classList.add('selected');
-    selectedLocation = location;
+  const radio    = div.querySelector('.cnc-radio');
+  const selectEl = div.querySelector('[data-select]');
+  const caretBtn = div.querySelector('.cnc-caret-btn');
 
-    // enable checkout only if in stock
+  // Select row -> choose location, open dropdown, add/update meta once
+  selectEl.addEventListener('click', async ()=>{
+    document.querySelectorAll('.cnc-radio').forEach(r=>r.checked=false);
+    radio.checked = true;
+
+    document.querySelectorAll('.location-item').forEach(el=>{
+      el.classList.remove('selected','is-open');
+      el.querySelector('.cnc-caret-btn')?.setAttribute('aria-expanded','false');
+    });
+    div.classList.add('selected','is-open');
+    caretBtn.setAttribute('aria-expanded','true');
+
+    selectedLocation = location;
     setCheckoutEnabled(inStock);
 
-    // add/update the meta line once
+    // add/update cart meta line (Shopify)
     await addOrUpdatePickupMeta(location);
+  });
+
+  // Caret -> only toggle dropdown
+  caretBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const isOpen = div.classList.toggle('is-open');
+    caretBtn.setAttribute('aria-expanded', String(isOpen));
+    if(isOpen){
+      document.querySelectorAll('.location-item.is-open').forEach(el=>{
+        if(el!==div){ el.classList.remove('is-open'); el.querySelector('.cnc-caret-btn')?.setAttribute('aria-expanded','false'); }
+      });
+    }
   });
 
   return div;
 }
 
-/* =================== ONE-TIME ADD / UPDATE CART =================== */
-let addingPickupMeta = false; // in-flight guard
-
-async function addOrUpdatePickupMeta(location) {
-  if (addingPickupMeta) return; // prevent double-taps
+/* =================== ONE-TIME ADD / UPDATE CART (Shopify) =================== */
+let addingPickupMeta = false;
+async function addOrUpdatePickupMeta(location){
+  // If you're not on Shopify, you can remove this whole function.
+  if (addingPickupMeta) return;
   addingPickupMeta = true;
-  try {
-    const cart = await fetch('/cart.js', { credentials:'same-origin' }).then(r => r.json());
-
-    // find existing meta line for pickup
+  try{
+    const cart = await fetch('/cart.js', {credentials:'same-origin'}).then(r=>r.json());
     let existing = null;
-    (cart.items || []).forEach(item => {
-      if (String(item.variant_id) === PICKUP_META_VARIANT) existing = item;
-    });
+    (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===PICKUP_META_VARIANT) existing=i; });
 
     const props = {
       'Pickup Location': location.name,
       'Location ID': location.id || location.raw?.locationId || '',
-      'Address': (location.address?.formatted || []).join(', '),
-      '__pickup_meta': 'true'
+      'Address': (location.address?.formatted||[]).join(', '),
+      '__pickup_meta':'true'
     };
 
-    if (!existing) {
-      // add once
+    if(!existing){
       await fetch('/cart/add.js', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -343,8 +335,7 @@ async function addOrUpdatePickupMeta(location) {
         body: JSON.stringify({ id: PICKUP_META_VARIANT, quantity: 1, properties: props })
       }).then(r=>r.json());
       console.log('[pickup] meta line ADDED');
-    } else {
-      // update only (no duplicates)
+    }else{
       await fetch('/cart/change.js', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -353,28 +344,12 @@ async function addOrUpdatePickupMeta(location) {
       }).then(r=>r.json());
       console.log('[pickup] meta line UPDATED');
     }
-  } catch (err) {
-    console.error('[pickup] add/update error', err);
-  } finally {
+  }catch(e){
+    console.error('[pickup] add/update error', e);
+  }finally{
     addingPickupMeta = false;
   }
 }
-
-/* =================== UTIL =================== */
-function showLoading(on){ loading.classList.toggle('hidden', !on); }
-
-/* (Optional) If you want to remove the pickup meta when user switches to Home Delivery, add:
-async function removePickupMeta() {
-  try{
-    const cart = await fetch('/cart.js').then(r=>r.json());
-    const updates = {};
-    (cart.items||[]).forEach(i => { if (String(i.variant_id) === PICKUP_META_VARIANT) updates[i.key] = 0; });
-    if(Object.keys(updates).length){
-      await fetch('/cart/update.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
-    }
-  }catch(e){ console.error('remove meta error', e); }
-}
-*/
 </script>
 </body>
 </html>
