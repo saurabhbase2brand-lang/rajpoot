@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       selectedMethod=m.dataset.method;
 
       if(selectedMethod==='delivery'){
-        alert();
+        setTimeout(()=>{document.querySelector('button#checkout').classList.remove('disabled');},1000);
         await removePickupMeta();
         selectedLocation=null;
         setCheckoutEnabled(false);
@@ -267,7 +267,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         locationSection.classList.remove('active');
       }else{
         locationSection.classList.add('active');
-        setTimeout(()=>{document.querySelector('button#checkout').classList.remove('disabled');},1000);
       }
     });
   });
