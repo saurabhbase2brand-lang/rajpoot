@@ -41,8 +41,10 @@
 <div class="cnc-stockcheck" id="cnc-stockcheck">
   <div class="cnc-header">
     <button class="cnc-close" type="button" id="cnc-toggle-btn">
-      <span class="cnc-close-icon">✕</span>
-      <span>Close Stock Check</span>
+      <span class="cnc-close-icon">
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 616 512"><path fill="currentColor" d="M602 118.6L537.1 15C531.3 5.7 521 0 510 0H106C95 0 84.7 5.7 78.9 15L14 118.6c-29.6 47.2-10 110.6 38 130.8v227.4c0 19.4 14.3 35.2 32 35.2h448c17.7 0 32-15.8 32-35.2V249.4c48-20.2 67.6-83.6 38-130.8zM516 464H100v-96h416zm-.2-144.2H100v-64.7c24-3.3 45.1-15.2 60.3-32.2 18 20.1 44.3 33.1 73.8 33.1 29.6 0 55.8-13 73.8-33.1 18 20.1 44.3 33.1 73.8 33.1 29.6 0 55.8-13 73.8-33.1 15.3 17 36.3 28.9 60.3 32.2zm47.9-133c-3.2 6.8-10.9 18.6-27 20.8-2.4.3-4.8.5-7.2.5-14.7 0-28.2-6.1-38.1-17.2L455.7 151 420 190.8c-9.9 11.1-23.5 17.2-38.1 17.2s-28.2-6.1-38.1-17.2L308 151l-35.7 39.8c-9.9 11.1-23.5 17.2-38.1 17.2-14.7 0-28.2-6.1-38.1-17.2L160.3 151l-35.7 39.8c-9.9 11.1-23.5 17.2-38.1 17.2-2.5 0-4.9-.2-7.2-.5-16-2.2-23.8-13.9-27-20.8-5-10.8-7.1-27.6 2.3-42.6L114.8 48h386.3l60.2 96.1c9.5 15.1 7.5 31.9 2.4 42.7z"></path></svg>
+      </span>
+      <span>Check Stock in Store</span>
     </button>
   </div>
 
@@ -59,7 +61,8 @@
 <script>
 (function(){
   /* ===== config ===== */
-  const API_BASE = "https://6d63ab86a3e8.ngrok-free.app";   // <-- change to your HTTPS endpoint
+  // ⚠️ Use a valid HTTPS endpoint (avoid mixed content). Change this to your server:
+  const API_BASE = "https://6d63ab86a3e8.ngrok-free.app";
   const PICKUP_ENDPOINT = API_BASE + "/api/pickup";
   const RADIUS_KM = 100;
   const VARIANT_ID = "46578436571392";
@@ -71,19 +74,25 @@
       return String(sel).replace(/([ #;?%&,.+*~':"!^$[\]()=>|\/@])/g,'\\$1');
     };
   }
-  const escapeHtml = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]}));
-  const safeGet = (o,p,f)=>{try{return p.split('.').reduce((a,k)=>a?.[k],o) ?? f}catch{return f}};
-  const badge = status => `<span class="cnc-badge ${/instock|in_stock/i.test(String(status||''))?'cnc-in':'cnc-out'}">${/instock|in_stock/i.test(String(status||''))?'✔ In stock':'✖ Out of stock'}</span>`;
-  const addressHTML = a=>{
+  function safeGet(obj, path, fallback){
+    try{
+      return path.split('.').reduce((o,k)=> (o && (k in o)) ? o[k] : undefined, obj) ?? fallback;
+    }catch{return fallback;}
+  }
+  function escapeHtml(s){return String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+  function badge(status){
+    const ok = /instock|in_stock/i.test(String(status||''));
+    return `<span class="cnc-badge ${ok?'cnc-in':'cnc-out'}">${ok?'✔ In stock':'✖ Out of stock'}</span>`;
+  }
+  function address(a){
     if(!a) return '';
-    const parts=[a.address1,a.address2,[a.city,a.province].filter(Boolean).join(', '),[a.country,a.zip].filter(Boolean).join(' - ')].filter(Boolean);
+    const parts = [
+      a.address1, a.address2,
+      [a.city,a.province].filter(Boolean).join(', '),
+      [a.country,a.zip].filter(Boolean).join(' - ')
+    ].filter(Boolean);
     return parts.join('<br>');
-  };
-  const addressFormattedArr = a=>{
-    if(!a) return [];
-    const arr=[a.address1,a.address2,[a.city,a.province].filter(Boolean).join(', '),[a.country,a.zip].filter(Boolean).join(' - ')].filter(Boolean);
-    return arr;
-  };
+  }
   function deriveZipFromSaved(sel){
     if (!sel) return '';
     const rawZip = safeGet(sel,'raw.address.zip','') || safeGet(sel,'address.zip','');
@@ -91,20 +100,6 @@
     const flat = Array.isArray(safeGet(sel,'address.formatted',[])) ? sel.address.formatted.join(' ') : (safeGet(sel,'address.formatted','') || '');
     const m = String(flat).match(/\b\d{4,6}\b/);
     return m ? m[0] : '';
-  }
-  function buildSavedSelection(loc){
-    const id  = loc.locationId || loc.id || '';
-    const name = loc.name || '';
-    const distance = typeof loc.distanceKm === 'number' ? loc.distanceKm : (loc.distance ?? null);
-    const formatted = addressFormattedArr(loc.address);
-    const zip = loc?.address?.zip || (formatted.join(' ').match(/\b\d{4,6}\b/)||[])[0] || '';
-    return {
-      id,
-      name,
-      distance,
-      address:{ formatted, zip },
-      raw: loc
-    };
   }
 
   /* ===== dom ===== */
@@ -123,16 +118,15 @@
   const rowTpl = (loc, idx)=>`
     <div class="cnc-item" data-idx="${idx}" data-id="${escapeHtml(loc.locationId || loc.id || '')}">
       <div class="cnc-row" data-toggle>
-        <input class="cnc-radio" type="radio" name="cnc-pickup" aria-label="Select ${escapeHtml(loc.name||'Location')}" />
+        <input class="cnc-radio" type="radio" name="cnc-pickup" aria-label="Select ${escapeHtml(loc.name)}" />
         <div class="cnc-name">${escapeHtml(loc.name||'Unknown')}</div>
-        <div class="cnc-distance">${Number(loc.distanceKm||loc.distance||0).toFixed(2)} km</div>
+        <div class="cnc-distance">${Number(loc.distanceKm||0).toFixed(2)} km</div>
         ${badge(loc.status)}
         <svg class="cnc-caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z" fill="#94a3b8"/></svg>
       </div>
-      <div class="cnc-detail">${addressHTML(loc.address)}</div>
+      <div class="cnc-detail">${address(loc.address)}</div>
     </div>
   `;
-
   function emitSelected(location){
     try { window.dispatchEvent(new CustomEvent('cnc:pickupSelected', { detail: { location } })); }
     catch(e){ console.warn('emitSelected failed', e); }
@@ -141,39 +135,24 @@
   function renderResults(payload, preferredId){
     const inR  = Array.isArray(payload?.inRadius) ? payload.inRadius : [];
     const outR = Array.isArray(payload?.outOfRadius) ? payload.outOfRadius : [];
-    let list = inR.length ? inR : [...inR, ...outR]; // prefer inRadius
-
+    let list = inR.length ? inR : [...inR, ...outR]; // only fall back if no inRadius
     if(!list.length){
       resultsBox.innerHTML = `<div class="cnc-empty">No nearby stores found.</div>`;
       return;
     }
-
     resultsBox.innerHTML = list.map(rowTpl).join('');
     const items = Array.from(resultsBox.querySelectorAll('.cnc-item'));
 
     items.forEach((item, i)=>{
       const radio  = item.querySelector('.cnc-radio');
       const header = item.querySelector('[data-toggle]');
-
       const selectThis = ()=>{
-        // visual select
         resultsBox.querySelectorAll('.cnc-radio').forEach(r=>r.checked=false);
         resultsBox.querySelectorAll('.cnc-item').forEach(el=>el.classList.remove('cnc-open'));
         radio.checked = true;
         item.classList.add('cnc-open');
-
-        // build & SAVE selection every time user changes
-        const sel = buildSavedSelection(list[i]);
-        try {
-          localStorage.setItem(SAVED_KEY, JSON.stringify(sel));
-          sessionStorage.setItem(SAVED_KEY, JSON.stringify(sel));
-          savedSelection = sel; // update in-memory reference, too
-        } catch(e) { console.warn('Failed to write selection to storage', e); }
-
-        // emit event
         emitSelected(list[i]);
       };
-
       header.addEventListener('click', e=>{ if(e.target!==radio) selectThis(); });
       radio.addEventListener('change', ()=>{ if(radio.checked) selectThis(); });
     });
@@ -181,7 +160,8 @@
     // Prefer saved location
     let selected = null;
     if (preferredId){
-      const matchEl = resultsBox.querySelector(`.cnc-item[data-id="${CSS.escape(preferredId)}"]`);
+      const idSel = `.cnc-item[data-id="${CSS.escape(preferredId)}"]`;
+      const matchEl = resultsBox.querySelector(idSel);
       if (matchEl){
         const r = matchEl.querySelector('.cnc-radio');
         if (r) r.checked = true;
@@ -189,20 +169,13 @@
         selected = list[Number(matchEl.getAttribute('data-idx'))];
       }
     }
-    // Fallback to first
+    // Fallback
     if(!selected){
       const firstItem  = resultsBox.querySelector('.cnc-item');
       const firstRadio = resultsBox.querySelector('.cnc-radio');
       if(firstItem && firstRadio){
         firstRadio.checked = true;
         firstItem.classList.add('cnc-open');
-        // also save first by default (optional; comment out if not desired)
-        const sel = buildSavedSelection(list[0]);
-        try {
-          localStorage.setItem(SAVED_KEY, JSON.stringify(sel));
-          sessionStorage.setItem(SAVED_KEY, JSON.stringify(sel));
-          savedSelection = sel;
-        } catch(e) {}
         selected = list[0];
       }
     }
@@ -217,7 +190,11 @@
         method:'POST',
         headers:{'Content-Type':'application/json'},
         mode:'cors',
-        body: JSON.stringify({ pincode:String(postcode||'').trim(), variantId:VARIANT_ID, radiusKm:RADIUS_KM })
+        body: JSON.stringify({
+          pincode: String(postcode||'').trim(),
+          variantId: VARIANT_ID,
+          radiusKm: RADIUS_KM
+        })
       });
       if(!res.ok) throw new Error('Network error: ' + res.status);
       const data = await res.json();
@@ -241,7 +218,7 @@
     searchBox.style.display = 'flex';
     resultsBox.innerHTML = '';
 
-    const preferredId = savedSelection?.id || savedSelection?.raw?.locationId || null;
+    const preferredId = safeGet(savedSelection,'id',null) || safeGet(savedSelection,'raw.locationId',null);
     const zip = deriveZipFromSaved(savedSelection);
     if (zip) {
       postcodeInput.value = zip;
@@ -256,5 +233,6 @@
   postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') search(postcodeInput.value, null); });
 })();
 </script>
+
 </body>
 </html>
