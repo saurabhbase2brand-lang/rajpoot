@@ -61,7 +61,6 @@
 <script>
 (function(){
   /* ===== config ===== */
-  // ⚠️ Use a valid HTTPS endpoint (avoid mixed content). Change this to your server:
   const API_BASE = "https://6d63ab86a3e8.ngrok-free.app";
   const PICKUP_ENDPOINT = API_BASE + "/api/pickup";
   const RADIUS_KM = 100;
@@ -81,7 +80,7 @@
   }
   function escapeHtml(s){return String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
   function badge(status){
-    const ok = /instock|in_stock/i.test(String(status||''));
+    const ok = /instock|in_stock/i.test(String(status||'')); // tweak if your API uses a different flag
     return `<span class="cnc-badge ${ok?'cnc-in':'cnc-out'}">${ok?'✔ In stock':'✖ Out of stock'}</span>`;
   }
   function address(a){
@@ -114,6 +113,24 @@
   let savedSelection = null;
   try { savedSelection = JSON.parse(localStorage.getItem(SAVED_KEY) || 'null'); } catch(e) { savedSelection = null; }
 
+  /* ===== persistence ===== */
+  function persistSelection(location){
+    try {
+      // Store a compact, stable shape (keep full object if you prefer)
+      const payload = {
+        id: location.locationId || location.id || null,
+        name: location.name,
+        distanceKm: location.distanceKm,
+        status: location.status,
+        address: location.address,
+        raw: location.raw ?? null
+      };
+      localStorage.setItem(SAVED_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.warn('Failed to save selection', e);
+    }
+  }
+
   /* ===== templating ===== */
   const rowTpl = (loc, idx)=>`
     <div class="cnc-item" data-idx="${idx}" data-id="${escapeHtml(loc.locationId || loc.id || '')}">
@@ -127,9 +144,13 @@
       <div class="cnc-detail">${address(loc.address)}</div>
     </div>
   `;
+
   function emitSelected(location){
-    try { window.dispatchEvent(new CustomEvent('cnc:pickupSelected', { detail: { location } })); }
-    catch(e){ console.warn('emitSelected failed', e); }
+    // 🔥 Save to localStorage whenever a selection happens (default, preferred, or manual)
+    persistSelection(location);
+    try {
+      window.dispatchEvent(new CustomEvent('cnc:pickupSelected', { detail: { location } }));
+    } catch(e){ console.warn('emitSelected failed', e); }
   }
 
   function renderResults(payload, preferredId){
@@ -151,7 +172,7 @@
         resultsBox.querySelectorAll('.cnc-item').forEach(el=>el.classList.remove('cnc-open'));
         radio.checked = true;
         item.classList.add('cnc-open');
-        emitSelected(list[i]);
+        emitSelected(list[i]); // <-- also persists
       };
       header.addEventListener('click', e=>{ if(e.target!==radio) selectThis(); });
       radio.addEventListener('change', ()=>{ if(radio.checked) selectThis(); });
@@ -169,7 +190,7 @@
         selected = list[Number(matchEl.getAttribute('data-idx'))];
       }
     }
-    // Fallback
+    // Fallback (first item)
     if(!selected){
       const firstItem  = resultsBox.querySelector('.cnc-item');
       const firstRadio = resultsBox.querySelector('.cnc-radio');
@@ -179,7 +200,7 @@
         selected = list[0];
       }
     }
-    if (selected) emitSelected(selected);
+    if (selected) emitSelected(selected); // <-- persists default/preferred too
   }
 
   async function search(postcode, preferredId){
@@ -233,6 +254,7 @@
   postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') search(postcodeInput.value, null); });
 })();
 </script>
+
 
 </body>
 </html>
