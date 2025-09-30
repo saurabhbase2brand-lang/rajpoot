@@ -1,29 +1,18 @@
-<div class="cnc-stockcheck" id="cnc-stockcheck">
-  <div class="cnc-header">
-    <button class="cnc-close" type="button" id="cnc-toggle-btn">
-      <span class="cnc-close-icon">✕</span>
-      <span>Close Stock Check</span>
-    </button>
-  </div>
-
-  <div class="cnc-search" id="cnc-search-box" style="display:none;">
-    <input id="cnc-postcode" class="cnc-input" type="text" placeholder="Enter Postcode" />
-    <button id="cnc-search-btn" class="cnc-search-btn" aria-label="Search">
-      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-1.06 1.06l.27.28h.79l5 5 1.5-1.5-5-5zM10 15.5A5.5 5.5 0 1010 4a5.5 5.5 0 000 11.5z" fill="currentColor"/></svg>
-    </button>
-  </div>
-
-  <div id="cnc-results" class="cnc-results" aria-live="polite"></div>
-</div>
-
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>cnc — Stock Check</title>
 <style>
   :root{--cnc-green:#10b981;--cnc-green-d:#0ea171;--cnc-red:#ef4444;--cnc-gray:#e5e7eb;--cnc-text:#0f172a;--cnc-sub:#475569}
-  .cnc-stockcheck{max-width:620px;border:1px solid var(--cnc-green);border-radius:16px;padding:12px;background:#fff;font-family:system-ui,Segoe UI,Inter,Roboto,Helvetica,Arial,sans-serif}
+  body{font-family:system-ui,Segoe UI,Inter,Roboto,Helvetica,Arial,sans-serif;background:#f9fafb;color:var(--cnc-text);padding:24px}
+  .cnc-stockcheck{max-width:680px;border:1px solid var(--cnc-green);border-radius:16px;padding:14px;background:#fff;margin:auto}
   .cnc-header{display:flex;justify-content:center}
-  .cnc-close{display:flex;align-items:center;gap:8px;border:1px solid var(--cnc-green);color:var(--cnc-green);background:#fff;border-radius:999px;padding:8px 18px;font-weight:700;cursor:pointer}
+  .cnc-close{display:flex;align-items:center;gap:8px;border:1px solid var(--cnc-green);color:var(--cnc-green);background:#fff;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer}
   .cnc-close:hover{background:#f6fffb}
   .cnc-close-icon{font-size:16px}
-  .cnc-search{display:flex;gap:8px;margin:12px 8px}
+  .cnc-search{display:flex;gap:8px;margin:14px 8px}
   .cnc-input{flex:1;border:1px solid #d1d5db;border-radius:6px;padding:10px 12px;font-size:14px}
   .cnc-search-btn{width:44px;display:grid;place-items:center;border:none;background:var(--cnc-green);color:#fff;border-radius:6px;cursor:pointer}
   .cnc-search-btn:hover{background:var(--cnc-green-d)}
@@ -35,7 +24,7 @@
   .cnc-radio:checked{border-color:var(--cnc-green)}
   .cnc-radio:checked::after{content:""; inline-size:10px; block-size:10px; background:var(--cnc-green); border-radius:999px}
   .cnc-name{font-weight:700}
-  .cnc-distance{margin-left:6px;color:var(--cnc-sub);font-weight:600;font-size:13px}
+  .cnc-distance{margin-left:6px;color:var(--cnc-sub);font-weight:600;font-size:13px;white-space:nowrap}
   .cnc-badge{margin-left:auto;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
   .cnc-badge.cnc-in{color:var(--cnc-green)}
   .cnc-badge.cnc-out{color:var(--cnc-red)}
@@ -46,27 +35,52 @@
   .cnc-loader,.cnc-empty,.cnc-error{padding:10px 8px;font-size:14px}
   .cnc-error{color:var(--cnc-red);font-weight:700}
 </style>
+</head>
+<body>
+
+<div class="cnc-stockcheck" id="cnc-stockcheck">
+  <div class="cnc-header">
+    <button class="cnc-close" type="button" id="cnc-toggle-btn">
+      <span class="cnc-close-icon">✕</span>
+      <span>Close Stock Check</span>
+    </button>
+  </div>
+
+  <div class="cnc-search" id="cnc-search-box">
+    <input id="cnc-postcode" class="cnc-input" type="text" placeholder="Enter Postcode" />
+    <button id="cnc-search-btn" class="cnc-search-btn" aria-label="Search">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-1.06 1.06l.27.28h.79l5 5 1.5-1.5-5-5zM10 15.5A5.5 5.5 0 1010 4a5.5 5.5 0 000 11.5z" fill="currentColor"/></svg>
+    </button>
+  </div>
+
+  <div id="cnc-results" class="cnc-results" aria-live="polite"></div>
+</div>
 
 <script>
 (function(){
-  const API_BASE = "https://6d63ab86a3e8.ngrok-free.app"; // change if needed
+  /* ===== config ===== */
+  const API_BASE = "https://YOUR-SERVER-OR-NGROK.com"; // <- change to your domain
+  const PICKUP_ENDPOINT = API_BASE + "/api/pickup";
+  const RADIUS_KM = 100;
+  const VARIANT_ID = "46578436571392"; // not used for UI—kept to match your API signature
+
+  /* ===== dom ===== */
   const toggleBtn = document.getElementById('cnc-toggle-btn');
   const searchBox = document.getElementById('cnc-search-box');
   const postcodeInput = document.getElementById('cnc-postcode');
   const searchBtn = document.getElementById('cnc-search-btn');
   const resultsBox = document.getElementById('cnc-results');
 
-  // ---- NEW: read previously saved selection from localStorage
+  /* ===== saved selection ===== */
   const SAVED_KEY = 'pickup.selectedLocation';
   let savedSelection = null;
   try { savedSelection = JSON.parse(localStorage.getItem(SAVED_KEY) || 'null'); } catch(e) {}
 
-  // helpers
+  /* ===== helpers ===== */
+  const escapeHtml = s => (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m]));
   const badge = (status)=>{
     const ok = /instock|in_stock/i.test(status || '');
-    return `<span class="cnc-badge ${ok?'cnc-in':'cnc-out'}">
-      ${ok ? '✔ In stock' : '✖ Out of stock'}
-    </span>`;
+    return `<span class="cnc-badge ${ok?'cnc-in':'cnc-out'}">${ok ? '✔ In stock' : '✖ Out of stock'}</span>`;
   };
   const address = (a)=>{
     const parts = [
@@ -76,9 +90,6 @@
     ].filter(Boolean);
     return parts.join('<br>');
   };
-  const escapeHtml = s => (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-
-  // Extract a postcode from saved selection if needed
   function deriveZipFromSaved(sel){
     if (!sel) return '';
     const rawZip = sel?.raw?.address?.zip;
@@ -88,7 +99,7 @@
     return m ? m[0] : '';
   }
 
-  // row template (add data-id to help preselect)
+  /* ===== templating ===== */
   const rowTpl = (loc, idx)=>`
     <div class="cnc-item" data-idx="${idx}" data-id="${escapeHtml(loc.locationId || loc.id || '')}">
       <div class="cnc-row" data-toggle>
@@ -104,51 +115,52 @@
     </div>
   `;
 
-  function renderResults(data, preferredId){
-    const list = [...(data.inRadius||[]), ...(data.outOfRadius||[])];
-    if(!list.length){ resultsBox.innerHTML = `<div class="cnc-empty">No nearby stores found.</div>`; return; }
+  function emitSelected(location){
+    window.dispatchEvent(new CustomEvent('cnc:pickupSelected', { detail: { location } }));
+  }
+
+  function renderResults(payload, preferredId){
+    // Prefer inRadius (<=100km). If your API guarantees it, you can just use inRadius.
+    let list = (payload.inRadius || []);
+    if (!list.length) list = [ ...(payload.inRadius||[]), ...(payload.outOfRadius||[]) ];
+
+    if(!list.length){
+      resultsBox.innerHTML = `<div class="cnc-empty">No nearby stores found.</div>`;
+      return;
+    }
 
     resultsBox.innerHTML = list.map(rowTpl).join('');
+    const items = Array.from(resultsBox.querySelectorAll('.cnc-item'));
 
-    const items = [...resultsBox.querySelectorAll('.cnc-item')];
-
-    // wire each row
     items.forEach((item, i)=>{
-      const radio = item.querySelector('.cnc-radio');
+      const radio  = item.querySelector('.cnc-radio');
       const header = item.querySelector('[data-toggle]');
 
       const selectThis = ()=>{
-        // unselect all
-        resultsBox.querySelectorAll('.cnc-radio').forEach(r => r.checked = false);
-        resultsBox.querySelectorAll('.cnc-item').forEach(el => el.classList.remove('cnc-open'));
-        // select current
+        resultsBox.querySelectorAll('.cnc-radio').forEach(r=>r.checked=false);
+        resultsBox.querySelectorAll('.cnc-item').forEach(el=>el.classList.remove('cnc-open'));
         radio.checked = true;
         item.classList.add('cnc-open');
         emitSelected(list[i]);
       };
 
-      header.addEventListener('click', (e)=>{
-        if(e.target === radio) return; // radio itself will handle
-        selectThis();
-      });
-      radio.addEventListener('change', ()=>{ if (radio.checked) selectThis(); });
+      header.addEventListener('click', e=>{ if(e.target!==radio) selectThis(); });
+      radio.addEventListener('change', ()=>{ if(radio.checked) selectThis(); });
     });
 
-    // ---- NEW: prefer saved location if present in list
+    // Prefer saved location if present
     let selected = null;
     if (preferredId){
       const matchEl = resultsBox.querySelector(`.cnc-item[data-id="${CSS.escape(preferredId)}"]`);
       if (matchEl){
-        matchEl.querySelector('.cnc-row [type="radio"]').checked = true;
+        matchEl.querySelector('.cnc-radio').checked = true;
         matchEl.classList.add('cnc-open');
-        const idx = Number(matchEl.getAttribute('data-idx'));
-        selected = list[idx];
+        selected = list[Number(matchEl.getAttribute('data-idx'))];
       }
     }
-
-    // Fallback to first item if nothing preselected
+    // Fallback to first item
     if(!selected){
-      const firstItem = resultsBox.querySelector('.cnc-item');
+      const firstItem  = resultsBox.querySelector('.cnc-item');
       const firstRadio = resultsBox.querySelector('.cnc-radio');
       if(firstItem && firstRadio){
         firstRadio.checked = true;
@@ -156,61 +168,60 @@
         selected = list[0];
       }
     }
-
     if (selected) emitSelected(selected);
-  }
-
-  function emitSelected(location){
-    window.dispatchEvent(new CustomEvent('cnc:pickupSelected', { detail: { location } }));
   }
 
   async function search(postcode, preferredId){
     resultsBox.innerHTML = `<div class="cnc-loader">Checking stock…</div>`;
     try{
-      const res = await fetch(`${API_BASE}/api/pickup`, {
+      const res = await fetch(PICKUP_ENDPOINT, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           pincode: String(postcode||'').trim(),
-          variantId: "46578436571392",
-          radiusKm: 100
+          variantId: VARIANT_ID,
+          radiusKm: RADIUS_KM
         })
       });
       if(!res.ok) throw new Error('Network error');
       const data = await res.json();
       renderResults(data, preferredId);
     }catch(e){
-      resultsBox.innerHTML = `<div class="cnc-error">Unable to fetch stock. Please try again.</div>`;
       console.error(e);
+      resultsBox.innerHTML = `<div class="cnc-error">Unable to fetch stock. Please try again.</div>`;
     }
   }
 
-  // UI interactions
-  let visible = false;
-  toggleBtn.addEventListener('click', async ()=>{
+  /* ===== toggle (still available) ===== */
+  let visible = true; // open by default
+  toggleBtn.addEventListener('click', ()=>{
     visible = !visible;
     searchBox.style.display = visible ? 'flex' : 'none';
+    if (!visible) resultsBox.innerHTML = '';
+  });
+
+  /* ===== open-by-default boot flow ===== */
+  document.addEventListener('DOMContentLoaded', async ()=>{
+    // make sure it's visible now
+    searchBox.style.display = 'flex';
     resultsBox.innerHTML = '';
 
-    if (visible) {
-      // ---- NEW: if we have a saved selection, prefill postcode and search, preferring that location
-      if (savedSelection) {
-        const zip = deriveZipFromSaved(savedSelection);
-        if (zip) {
-          postcodeInput.value = zip;
-          await search(zip, savedSelection.id || savedSelection.raw?.locationId);
-          return; // don’t move focus unnecessarily
-        }
-      }
-      // Otherwise just focus input
+    // if we have a saved location, prefill & search, preselect that store
+    const preferredId = savedSelection?.id || savedSelection?.raw?.locationId || null;
+    const zip = deriveZipFromSaved(savedSelection);
+    if (zip) {
+      postcodeInput.value = zip;
+      await search(zip, preferredId);
+    } else {
+      // no saved zip -> just focus the input
       postcodeInput.focus();
     }
   });
 
-  searchBtn.addEventListener('click', ()=> search(postcodeInput.value));
-  postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') search(postcodeInput.value); });
-
-  // You can also listen to the selection elsewhere:
-  // window.addEventListener('cnc:pickupSelected', (e)=> console.log('Selected location:', e.detail.location));
+  /* ===== manual search ===== */
+  searchBtn.addEventListener('click', ()=> search(postcodeInput.value, null));
+  postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') search(postcodeInput.value, null); });
 })();
 </script>
+</body>
+</html>
