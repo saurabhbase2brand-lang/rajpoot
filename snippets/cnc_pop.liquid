@@ -27,7 +27,11 @@
   .cnc-x{border:0;background:transparent;cursor:pointer;width:32px;height:32px;border-radius:6px;display:grid;place-items:center}
   .cnc-x:hover{background:#f3f4f6}
   .cnc-body{padding:16px 18px}
-  .cnc-foot{padding:12px 18px;border-top:1px solid #eef2f6;display:flex;justify-content:flex-end;color:#6b7280;font-size:12px}
+  .cnc-foot{padding:12px 18px;border-top:1px solid #eef2f6;display:flex;justify-content:space-between;gap:12px;align-items:center}
+  .cnc-foot-note{color:#6b7280;font-size:12px}
+  .cnc-primary{background:#01AF67;border:0;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer}
+  .cnc-primary:disabled{opacity:.5;cursor:not-allowed}
+  .cnc-primary:hover:not(:disabled){background:#0b9a5c}
 
   .cnc-info{color:#6b7280;font-size:13px;margin-bottom:10px}
   .cnc-pill{display:inline-flex;align-items:center;gap:6px;background:#eef7ff;border:1px solid #cfe6ff;color:#075985;border-radius:999px;padding:3px 8px;font-size:12px;margin:6px 0 12px}
@@ -113,7 +117,11 @@
         <p class="cnc-info">You can enter a postcode above and search manually.</p>
       </div>
     </div>
-    <div class="cnc-foot">Close to hide for 24 hours</div>
+    <div class="cnc-foot">
+      <span class="cnc-foot-note">Close to hide for 24 hours</span>
+      <!-- Optional confirm button (stays disabled until a location is selected) -->
+      <button id="cnc-confirmBtn" class="cnc-primary" disabled>Use this location</button>
+    </div>
   </div>
 </div>
 
@@ -135,10 +143,12 @@ const cncFallback    = document.getElementById('cnc-fallback');
 const cncSavedChip   = document.getElementById('cnc-savedChip');
 const cncSearchInput = document.getElementById('cnc-searchInput');
 const cncSearchBtn   = document.getElementById('cnc-searchBtn');
+const cncConfirmBtn  = document.getElementById('cnc-confirmBtn');
 
 /* ====== STATE ====== */
 let cncCurrentPostcode = null;
 let cncGeoCoords = null;
+let cncTempSelected = null; // holds the selection while modal is open
 
 /* ====== HELPERS ====== */
 const cncEscape = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -198,6 +208,7 @@ async function cncReverseToPostcode(lat, lon){
 async function cncFetchPickup(postcode){
   cncList.innerHTML='';
   cncLoading.classList.remove('cnc-hidden');
+  cncConfirmBtn.disabled = !cncTempSelected;
 
   try{
     const r = await fetch(PICKUP_API,{
@@ -260,11 +271,9 @@ function cncRenderList(items){
       cncList.querySelectorAll('.cnc-row').forEach(el=>el.classList.remove('cnc-open'));
       select.classList.add('cnc-open');
 
-      localStorage.setItem(CNC_LS_SELECTED_LOCATION, JSON.stringify(loc));
-      sessionStorage.setItem(CNC_LS_SELECTED_LOCATION, JSON.stringify(loc));
-      cncSetSavedChip(loc);
-
-      cncHideModal(false);
+      // Save only to a temp var; DO NOT close the modal automatically
+      cncTempSelected = loc;
+      cncConfirmBtn.disabled = false;
     });
 
     caretB.addEventListener('click', e=>{
@@ -317,6 +326,15 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   }
   cncSearchBtn.addEventListener('click', cncTriggerSearch);
   cncSearchInput.addEventListener('keydown', e=>{ if(e.key==='Enter') cncTriggerSearch(); });
+
+  // Confirm button: persist the temp selection and close (optional)
+  cncConfirmBtn.addEventListener('click', ()=>{
+    if (!cncTempSelected) return;
+    localStorage.setItem(CNC_LS_SELECTED_LOCATION, JSON.stringify(cncTempSelected));
+    sessionStorage.setItem(CNC_LS_SELECTED_LOCATION, JSON.stringify(cncTempSelected));
+    cncSetSavedChip(cncTempSelected);
+    cncHideModal(false); // close WITHOUT starting the 24h suppression timer
+  });
 
   cncCloseModal.addEventListener('click', ()=> cncHideModal(true));
   cncOverlay.addEventListener('click', e=>{ if(e.target===cncOverlay) cncHideModal(true); });
