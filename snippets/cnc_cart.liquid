@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Click & Collect – Dropdown + One-time Cart Add + Cleanup</title>
+<title>Click & Collect – add once + cleanup</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:#f8f9fa;color:#111;line-height:1.6;padding:20px}
@@ -35,7 +35,6 @@
   .cnc-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
   .cnc-right{display:flex;align-items:center;gap:10px}
 
-  /* custom radio */
   .cnc-radio{appearance:none;-webkit-appearance:none;inline-size:18px;block-size:18px;border:2px solid #cbd5e1;border-radius:999px;display:inline-grid;place-items:center;cursor:pointer;flex:0 0 auto}
   .cnc-radio:checked{border-color:#01AF67}
   .cnc-radio:checked::after{content:"";inline-size:10px;block-size:10px;background:#01AF67;border-radius:999px}
@@ -50,7 +49,6 @@
   .cnc-caret{width:14px;height:14px;transition:transform .18s ease}
   .location-item.is-open .cnc-caret{transform:rotate(180deg)}
 
-  /* dropdown address (accordion) */
   .sdev-location-address{color:#111;padding:8px 28px 6px 28px;line-height:1.45;overflow:hidden;max-height:0;transition:max-height .22s ease}
   .location-item.is-open .sdev-location-address{max-height:220px}
 
@@ -110,12 +108,12 @@
 </div>
 
 <script>
-/* =================== CONFIG =================== */
-const PICKUP_API          = "http://localhost:3000/api/pickup"; // your pickup API
-const VARIANT_ID          = "46578436571392";                    // variant for availability lookup
-const PICKUP_META_VARIANT = "46950237503744";                    // dummy variant to carry pickup info (Shopify)
+/* ======== CONFIG ======== */
+const PICKUP_API          = "http://localhost:3000/api/pickup";
+const VARIANT_ID          = "46578436571392";
+const PICKUP_META_VARIANT = "46950237503744";
 
-/* =================== DOM =================== */
+/* ======== DOM ======== */
 const deliveryMethods = document.querySelectorAll('.delivery-method');
 const postcodeInput   = document.getElementById('postcode-input');
 const searchButton    = document.getElementById('search-button');
@@ -124,131 +122,105 @@ const locationsList   = document.getElementById('locations-list');
 const loading         = document.getElementById('loading');
 const checkoutButton  = document.getElementById('checkout');
 
-/* =================== STATE =================== */
+/* ======== STATE ======== */
 let selectedMethod   = 'collect';
 let selectedLocation = null;
 let customerCoords   = null;
 
-/* =================== HELPERS =================== */
+/* ======== UTILS ======== */
 const escapeHTML = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function formatAddress(a){
-  const line1 = [a?.address1, a?.address2].filter(Boolean).join(', ');
-  const line2 = [a?.city, a?.province].filter(Boolean).join(', ');
-  const line3 = [a?.country, a?.zip].filter(Boolean).join(' - ');
+  const line1=[a?.address1,a?.address2].filter(Boolean).join(', ');
+  const line2=[a?.city,a?.province].filter(Boolean).join(', ');
+  const line3=[a?.country,a?.zip].filter(Boolean).join(' - ');
   return [line1,line2,line3].filter(Boolean);
 }
 function calculateDistance(lat1, lon1, lat2, lon2){
   if ([lat1, lon1, lat2, lon2].some(v=>v==null)) return null;
   const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
   return +(2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(2);
 }
-function setCheckoutEnabled(on){
-  checkoutButton.classList.toggle('disabled', !on);
-  checkoutButton.disabled = !on;
-}
-function showLoading(on){ loading.classList.toggle('hidden', !on); }
+function setCheckoutEnabled(on){ checkoutButton.classList.toggle('disabled',!on); checkoutButton.disabled=!on; }
+function showLoading(on){ loading.classList.toggle('hidden',!on); }
 
-/* =================== CART HELPERS (Shopify) =================== */
+/* ======== CART HELPERS (Shopify) ======== */
 async function removePickupMeta(){
   try{
-    const cart = await fetch('/cart.js', {credentials:'same-origin'}).then(r=>r.json());
-    const updates = {};
-    (cart.items||[]).forEach(i => { if (String(i.variant_id) === PICKUP_META_VARIANT) updates[i.key] = 0; });
-    if (Object.keys(updates).length){
-      await fetch('/cart/update.js', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body: JSON.stringify({ updates })
-      });
-      console.log('[pickup] meta line REMOVED');
+    const cart=await fetch('/cart.js',{credentials:'same-origin'}).then(r=>r.json());
+    const updates={};
+    (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===PICKUP_META_VARIANT) updates[i.key]=0; });
+    if(Object.keys(updates).length){
+      await fetch('/cart/update.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({updates})});
+      console.log('[pickup] REMOVED');
     }
-  }catch(e){ console.error('[pickup] remove error', e); }
+  }catch(e){ console.error('[pickup] remove error',e); }
 }
 
-let addingPickupMeta = false;
+let addingPickupMeta=false;
 async function addOrUpdatePickupMeta(location){
-  if (addingPickupMeta) return;
-  addingPickupMeta = true;
+  if(addingPickupMeta) return;
+  addingPickupMeta=true;
   try{
-    const cart = await fetch('/cart.js', {credentials:'same-origin'}).then(r=>r.json());
-    let existing = null;
+    const cart=await fetch('/cart.js',{credentials:'same-origin'}).then(r=>r.json());
+    let existing=null;
     (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===PICKUP_META_VARIANT) existing=i; });
 
-    const props = {
-      'Pickup Location': location.name,
-      'Location ID': location.id || location.raw?.locationId || '',
-      'Address': (location.address?.formatted||[]).join(', '),
+    const props={
+      'Pickup Location':location.name,
+      'Location ID':location.id||location.raw?.locationId||'',
+      'Address':(location.address?.formatted||[]).join(', '),
       '__pickup_meta':'true'
     };
 
     if(!existing){
-      await fetch('/cart/add.js', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body: JSON.stringify({ id: PICKUP_META_VARIANT, quantity: 1, properties: props })
-      }).then(r=>r.json());
-      console.log('[pickup] meta line ADDED');
+      await fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({id:PICKUP_META_VARIANT,quantity:1,properties:props})}).then(r=>r.json());
+      console.log('[pickup] ADDED');
     }else{
-      await fetch('/cart/change.js', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body: JSON.stringify({ id: existing.key, quantity: 1, properties: props })
-      }).then(r=>r.json());
-      console.log('[pickup] meta line UPDATED');
+      await fetch('/cart/change.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({id:existing.key,quantity:1,properties:props})}).then(r=>r.json());
+      console.log('[pickup] UPDATED');
     }
-  }catch(e){ console.error('[pickup] add/update error', e); }
-  finally{ addingPickupMeta = false; }
+  }catch(e){ console.error('[pickup] add/update error',e); }
+  finally{ addingPickupMeta=false; }
 }
 
-/* =================== GEO =================== */
+/* ======== GEO ======== */
 function getCustomerLocation(){
   return new Promise(resolve=>{
     if(navigator.geolocation){
       navigator.geolocation.getCurrentPosition(
-        pos=>resolve({latitude:pos.coords.latitude, longitude:pos.coords.longitude}),
-        ()=>resolve({latitude:30.7333, longitude:76.7794})
+        pos=>resolve({latitude:pos.coords.latitude,longitude:pos.coords.longitude}),
+        ()=>resolve({latitude:30.7333,longitude:76.7794})
       );
-    }else{
-      resolve({latitude:30.7333, longitude:76.7794});
-    }
+    }else resolve({latitude:30.7333,longitude:76.7794});
   });
 }
 
-/* =================== INIT =================== */
+/* ======== INIT & LIFECYCLE CLEANUP ======== */
 document.addEventListener('DOMContentLoaded', async ()=>{
-  // Clean any stale pickup meta when entering the cart page
+  // Always clean any stale C&C meta when loading the cart page
   await removePickupMeta();
 
-  customerCoords = await getCustomerLocation();
+  customerCoords=await getCustomerLocation();
 
-  // Delivery method switches
   deliveryMethods.forEach(m=>{
     m.addEventListener('click', async ()=>{
       deliveryMethods.forEach(x=>x.classList.remove('active'));
       m.classList.add('active');
-      selectedMethod = m.dataset.method;
+      selectedMethod=m.dataset.method;
 
-      // If switching to Home Delivery, remove pickup meta & reset UI
-      if (selectedMethod === 'delivery') {
+      if(selectedMethod==='delivery'){
+        // switching to Delivery ⇒ remove C&C meta immediately
         await removePickupMeta();
-        selectedLocation = null;
+        selectedLocation=null;
         setCheckoutEnabled(false);
-        // collapse & uncheck radios
         document.querySelectorAll('.location-item').forEach(el=>{
           el.classList.remove('selected','is-open');
-          el.querySelector('.cnc-radio')?.checked && (el.querySelector('.cnc-radio').checked = false);
+          const r=el.querySelector('.cnc-radio'); if(r) r.checked=false;
         });
-      }
-
-      // Show/hide section
-      if(selectedMethod==='collect'){
-        locationSection.classList.add('active');
-      }else{
         locationSection.classList.remove('active');
+      }else{
+        locationSection.classList.add('active');
       }
     });
   });
@@ -256,23 +228,21 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   searchButton.addEventListener('click', onSearch);
   postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSearch(); });
 
-  // Checkout click: (optional) remove meta before navigating to checkout
-  checkoutButton.addEventListener('click', async ()=>{
-    await removePickupMeta();
-    // navigate to checkout — replace if your theme handles this differently
-    window.location.href = '/checkout';
+  // Checkout: navigate (optionally clean just before, but we also clean on return)
+  checkoutButton.addEventListener('click', ()=>{
+    window.location.href='/checkout';
   });
 
-  // show section initially
   locationSection.classList.add('active');
 });
 
-// When user returns from checkout/back button (bfcache or new load), clean again
+// Coming back from checkout (Back button / bfcache) or tab refocus → clean meta again
 window.addEventListener('pageshow', async ()=>{ await removePickupMeta(); });
+document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible'){ await removePickupMeta(); }});
 
-/* =================== SEARCH =================== */
+/* ======== SEARCH / RENDER ======== */
 async function onSearch(){
-  const postcode = postcodeInput.value.trim();
+  const postcode=postcodeInput.value.trim();
   if(!postcode){ alert('Please enter a postcode'); return; }
   if(selectedMethod!=='collect'){ alert('Switch to Click & Collect to search pickup locations.'); return; }
   await loadPickup(postcode);
@@ -281,61 +251,40 @@ async function onSearch(){
 async function loadPickup(pincode){
   showLoading(true);
   setCheckoutEnabled(false);
-  selectedLocation = null;
-  locationsList.innerHTML = '';
+  selectedLocation=null;
+  locationsList.innerHTML='';
   try{
-    const res = await fetch(PICKUP_API, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ pincode, variantId: VARIANT_ID, radiusKm: 100 })
-    });
+    const res=await fetch(PICKUP_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pincode,variantId:VARIANT_ID,radiusKm:100})});
     if(!res.ok) throw new Error('Pickup API error');
-    const data = await res.json();
-    const merged = [...(data.inRadius||[]), ...(data.outOfRadius||[])].map(loc=>{
-      const formatted = formatAddress(loc.address);
-      const dist = typeof loc.distanceKm==='number' ? loc.distanceKm
-                  : calculateDistance(customerCoords?.latitude, customerCoords?.longitude, loc.coordinates?.lat, loc.coordinates?.lng);
-      return {
-        id: loc.locationId, name: loc.name,
-        distance: dist, status: String(loc.status||'').toLowerCase(),
-        address:{formatted}, raw: loc
-      };
+    const data=await res.json();
+    const list=[...(data.inRadius||[]),...(data.outOfRadius||[])].map(loc=>{
+      const formatted=formatAddress(loc.address);
+      const dist=typeof loc.distanceKm==='number'?loc.distanceKm:calculateDistance(customerCoords?.latitude,customerCoords?.longitude,loc.coordinates?.lat,loc.coordinates?.lng);
+      return{ id:loc.locationId,name:loc.name,distance:dist,status:String(loc.status||'').toLowerCase(),address:{formatted},raw:loc };
     });
-
-    renderLocations(merged);
+    renderLocations(list);
   }catch(err){
     console.error(err);
-    locationsList.innerHTML = `<div class="error-message">Failed to load stock information. Please try again.</div>`;
-  }finally{
-    showLoading(false);
-  }
+    locationsList.innerHTML=`<div class="error-message">Failed to load stock information. Please try again.</div>`;
+  }finally{ showLoading(false); }
 }
 
-/* =================== RENDER =================== */
 function renderLocations(list){
-  locationsList.innerHTML = '';
-  if(!list.length){
-    locationsList.innerHTML = `<div class="no-results">No locations found for the entered postcode.</div>`;
-    return;
-  }
-  list.sort((a,b)=>{
-    if(a.distance==null && b.distance==null) return 0;
-    if(a.distance==null) return 1;
-    if(b.distance==null) return -1;
-    return a.distance-b.distance;
-  });
+  locationsList.innerHTML='';
+  if(!list.length){ locationsList.innerHTML='<div class="no-results">No locations found for the entered postcode.</div>'; return; }
+  list.sort((a,b)=> (a.distance??1e9)-(b.distance??1e9));
   list.forEach(loc=>locationsList.appendChild(locationRow(loc)));
 }
 
 function locationRow(location){
-  const div = document.createElement('div');
-  const inStock = /instock|in_stock/i.test(location.status);
-  const distanceStr = location.distance!=null ? `${location.distance} km` : '';
+  const div=document.createElement('div');
+  const inStock=/instock|in_stock/i.test(location.status);
+  const distanceStr=location.distance!=null?`${location.distance} km`:'';
 
-  div.className = 'location-item';
-  div.dataset.locationId = location.id;
+  div.className='location-item';
+  div.dataset.locationId=location.id;
 
-  div.innerHTML = `
+  div.innerHTML=`
     <div class="cnc-row">
       <div class="cnc-left" data-select>
         <input class="cnc-radio" type="radio" name="pickup-radio" aria-label="Select ${escapeHTML(location.name)}" />
@@ -352,33 +301,33 @@ function locationRow(location){
     <div class="sdev-location-address">${location.address.formatted.map(escapeHTML).join('<br>')}</div>
   `;
 
-  const radio    = div.querySelector('.cnc-radio');
-  const selectEl = div.querySelector('[data-select]');
-  const caretBtn = div.querySelector('.cnc-caret-btn');
+  const radio   = div.querySelector('.cnc-radio');
+  const select  = div.querySelector('[data-select]');
+  const caret   = div.querySelector('.cnc-caret-btn');
 
-  // Select row -> choose location, open dropdown, add/update meta once
-  selectEl.addEventListener('click', async ()=>{
+  // Select = choose location + open + add/update meta once
+  select.addEventListener('click', async ()=>{
     document.querySelectorAll('.cnc-radio').forEach(r=>r.checked=false);
-    radio.checked = true;
+    radio.checked=true;
 
     document.querySelectorAll('.location-item').forEach(el=>{
       el.classList.remove('selected','is-open');
       el.querySelector('.cnc-caret-btn')?.setAttribute('aria-expanded','false');
     });
     div.classList.add('selected','is-open');
-    caretBtn.setAttribute('aria-expanded','true');
+    caret.setAttribute('aria-expanded','true');
 
-    selectedLocation = location;
+    selectedLocation=location;
     setCheckoutEnabled(inStock);
 
     await addOrUpdatePickupMeta(location);
   });
 
-  // Caret -> only toggle dropdown
-  caretBtn.addEventListener('click', (e)=>{
+  // Caret toggles only the dropdown
+  caret.addEventListener('click',e=>{
     e.stopPropagation();
-    const isOpen = div.classList.toggle('is-open');
-    caretBtn.setAttribute('aria-expanded', String(isOpen));
+    const isOpen=div.classList.toggle('is-open');
+    caret.setAttribute('aria-expanded',String(isOpen));
     if(isOpen){
       document.querySelectorAll('.location-item.is-open').forEach(el=>{
         if(el!==div){ el.classList.remove('is-open'); el.querySelector('.cnc-caret-btn')?.setAttribute('aria-expanded','false'); }
