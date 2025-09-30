@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Click & Collect – add once + cleanup</title>
+<title>Click & Collect – with stock validation</title>
 <style>
   .cart__ctas { display: none; }
   *{margin:0;padding:0;box-sizing:border-box}
@@ -87,7 +87,7 @@
     <div class="postcode-section">
       <div class="postcode-label" id="postcode-label">Search for a location to pick up your order:</div>
       <div class="postcode-input-container">
-        <input id="postcode-input" class="postcode-input" type="text" placeholder="Enter Postcode" maxlength="10" value="400001"/>
+        <input id="postcode-input" class="postcode-input" type="text" placeholder="Enter Postcode" maxlength="10" value="160022"/>
         <button id="search-button" class="search-button" aria-label="Search">
           <svg viewBox="0 0 512 512" width="18" height="18"><path fill="currentColor" d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"/></svg>
         </button>
@@ -113,8 +113,8 @@
 <script>
 /* ======== CONFIG ======== */
 const PICKUP_API          = "https://6d63ab86a3e8.ngrok-free.app/api/pickup";
-const VARIANT_ID          = "46578436571392";      // variant you are validating
-const PICKUP_META_VARIANT = "46950237503744";      // meta item that carries pickup info
+let   VARIANT_ID          = null;                  // set to string id to force a specific variant; keep null to auto-detect
+const PICKUP_META_VARIANT = "46950237503744";
 
 /* ======== STORAGE KEYS ======== */
 const SAVED_LOC_KEY = 'pickup.selectedLocation';
@@ -152,8 +152,12 @@ function calculateDistance(lat1, lon1, lat2, lon2){
 }
 function setCheckoutEnabled(on){ checkoutButton.classList.toggle('disabled',!on); checkoutButton.disabled=!on; }
 function showLoading(on){ loading.classList.toggle('hidden',!on); }
+function showQtyError(msg){
+  qtyErrorEl.textContent = msg || "";
+  qtyErrorEl.classList.toggle('hidden', !msg);
+}
 
-/* ======== STORAGE HELPERS ======== */
+/* ======== STORAGE ======== */
 function persistSelection(location){
   try{
     const payload = {
@@ -180,14 +184,14 @@ function readSavedPostcode(){
 }
 function deriveZipFromSaved(sel){
   if (!sel) return '';
-  const z = sel.raw?.address?.zip || sel.address?.zip || '';
+  const z = sel?.raw?.address?.zip || sel?.address?.zip || '';
   if (z) return String(z);
-  const flat = Array.isArray(sel.address?.formatted) ? sel.address.formatted.join(' ') : '';
+  const flat = Array.isArray(sel?.address?.formatted) ? sel.address.formatted.join(' ') : '';
   const m = String(flat).match(/\b\d{4,6}\b/);
   return m ? m[0] : '';
 }
 
-/* ======== CART HELPERS (Shopify) ======== */
+/* ======== CART HELPERS ======== */
 async function removePickupMeta(){
   try{
     const cart=await fetch('/cart.js',{credentials:'same-origin'}).then(r=>r.json());
@@ -195,21 +199,30 @@ async function removePickupMeta(){
     (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===PICKUP_META_VARIANT) updates[i.key]=0; });
     if(Object.keys(updates).length){
       await fetch('/cart/update.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({updates})});
-      console.log('[pickup] REMOVED');
     }
   }catch(e){ console.error('[pickup] remove error',e); }
 }
 
-async function getCartQtyForVariant(variantId){
+async function getLiveCart(){
   try{
-    const cart=await fetch('/cart.js',{credentials:'same-origin'}).then(r=>r.json());
-    let qty=0;
-    (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===String(variantId)) qty+=Number(i.quantity||0); });
-    return qty;
+    const res = await fetch('/cart.js', { credentials:'same-origin', cache:'no-store' });
+    return await res.json();
   }catch(e){
-    console.error('getCartQty error', e);
-    return 0;
+    console.error('getLiveCart error', e);
+    return { items: [] };
   }
+}
+
+async function getTargetVariantId(){
+  if (VARIANT_ID) return String(VARIANT_ID);
+  const cart = await getLiveCart();
+  const line = (cart.items || []).find(i => !String(i.properties?.__pickup_meta).includes('true'));
+  return line ? String(line.variant_id) : null;
+}
+function qtyForVariant(cart, variantId){
+  let q = 0;
+  (cart.items || []).forEach(i => { if (String(i.variant_id) === String(variantId)) q += Number(i.quantity || 0); });
+  return q;
 }
 
 let addingPickupMeta=false;
@@ -231,13 +244,41 @@ async function addOrUpdatePickupMeta(location){
 
     if(!existing){
       await fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({id:PICKUP_META_VARIANT,quantity:1,properties:props})}).then(r=>r.json());
-      console.log('[pickup] ADDED');
     }else{
       await fetch('/cart/change.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({id:existing.key,quantity:1,properties:props})}).then(r=>r.json());
-      console.log('[pickup] UPDATED');
     }
   }catch(e){ console.error('[pickup] add/update error',e); }
   finally{ addingPickupMeta=false; }
+}
+
+/* ======== VALIDATION ======== */
+async function validateQtyAgainstLocation(location){
+  try{
+    const cart        = await getLiveCart();
+    const targetVid   = await getTargetVariantId();
+    if (!targetVid){
+      showQtyError("");
+      setCheckoutEnabled(true);
+      return true;
+    }
+    const cartQty     = qtyForVariant(cart, targetVid);
+    const available   = Number(location?.available ?? 0);
+
+    if (cartQty > available){
+      showQtyError(`Selected location "${location.name}" has only ${available} in stock. Reduce quantity to ${available} or choose another location.`);
+      setCheckoutEnabled(false);
+      return false;
+    }else{
+      showQtyError("");
+      setCheckoutEnabled(true);
+      return true;
+    }
+  }catch(e){
+    console.error('validate error', e);
+    showQtyError("Unable to validate stock at the selected location. Please try again.");
+    setCheckoutEnabled(false);
+    return false;
+  }
 }
 
 /* ======== GEO ======== */
@@ -250,23 +291,6 @@ function getCustomerLocation(){
       );
     }else resolve({latitude:30.7333,longitude:76.7794});
   });
-}
-
-/* ======== VALIDATION ======== */
-async function validateQtyAgainstLocation(location){
-  const cartQty = await getCartQtyForVariant(VARIANT_ID);
-  const available = Number(location?.available ?? 0);
-
-  if (cartQty > available){
-    qtyErrorEl.textContent = `Selected location "${location.name}" has only ${available} in stock. Please reduce quantity to ${available} or choose another location.`;
-    qtyErrorEl.classList.remove('hidden');
-    setCheckoutEnabled(false);
-    return false;
-  }else{
-    qtyErrorEl.classList.add('hidden');
-    setCheckoutEnabled(true);
-    return true;
-  }
 }
 
 /* ======== INIT ======== */
@@ -293,8 +317,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
           const r=el.querySelector('.cnc-radio'); if(r) r.checked=false;
         });
         locationSection.classList.remove('active');
+        showQtyError("");
       }else{
         locationSection.classList.add('active');
+        if (selectedLocation) await validateQtyAgainstLocation(selectedLocation);
       }
     });
   });
@@ -305,10 +331,17 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   checkoutButton.addEventListener('click', async (e)=>{
     if (selectedMethod==='collect' && selectedLocation){
       const ok = await validateQtyAgainstLocation(selectedLocation);
-      if (!ok){ e.preventDefault(); return; }
+      if (!ok){
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
     }
     window.location.href='/checkout';
   });
+
+  // attach listeners for qty changes
+  attachCartQtyListeners();
 
   locationSection.classList.add('active');
   if (savedPC) {
@@ -332,12 +365,13 @@ async function loadPickup(pincode, preferredId=null){
   showLoading(true);
   setCheckoutEnabled(false);
   selectedLocation=null;
+  showQtyError("");
   locationsList.innerHTML='';
   try{
     const res=await fetch(PICKUP_API,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pincode,variantId:VARIANT_ID,radiusKm:100})
+      body:JSON.stringify({pincode,variantId:await getTargetVariantId() || VARIANT_ID || '', radiusKm:100})
     });
     if(!res.ok) throw new Error('Pickup API error');
     const data=await res.json();
@@ -440,7 +474,7 @@ function locationRow(location){
     persistSelection(location);
 
     await addOrUpdatePickupMeta(location);
-    await validateQtyAgainstLocation(location);
+    await validateQtyAgainstLocation(location); // <-- only validator decides button state
   });
 
   caret.addEventListener('click',e=>{
@@ -455,6 +489,44 @@ function locationRow(location){
   });
 
   return div;
+}
+
+/* ======== QTY CHANGE LISTENERS ======== */
+function attachCartQtyListeners(){
+  const debounced = (()=>{ let t; return (fn)=>{ clearTimeout(t); t=setTimeout(fn, 400); }; })();
+
+  const onQtyChange = ()=>{
+    if (selectedLocation){
+      debounced(()=> validateQtyAgainstLocation(selectedLocation));
+    }
+  };
+
+  document.addEventListener('change', (e)=>{
+    const el = e.target;
+    if (!el) return;
+    if (
+      el.matches('input[name="updates[]"]') || 
+      el.matches('input[name="quantity"]')  ||
+      el.matches('input[type="number"][data-ajax-cart-quantity]')
+    ){
+      onQtyChange();
+    }
+  });
+
+  document.addEventListener('click', (e)=>{
+    const el = e.target.closest('button, a');
+    if (!el) return;
+    if (
+      el.matches('[name="minus"]') || el.matches('[name="plus"]') ||
+      el.matches('[data-ajax-cart-increment]') || el.matches('[data-ajax-cart-decrement]') ||
+      el.matches('[data-quantity-plus]') || el.matches('[data-quantity-minus]')
+    ){
+      onQtyChange();
+    }
+  });
+
+  const obs = new MutationObserver(()=>{ if (selectedLocation) validateQtyAgainstLocation(selectedLocation); });
+  obs.observe(document.body, { subtree:true, childList:true });
 }
 </script>
 
