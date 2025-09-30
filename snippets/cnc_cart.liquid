@@ -1,9 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Click & Collect – Demo</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  .same-day-info { display:flex; align-items:center; gap:10px; }
+  .delivery-method { cursor:pointer; font-size:15px; font-weight:600; color:#000; display:flex; align-items:center; gap:9px; }
+  .delivery-method svg{ width:22px; height:22px; }
+  .delivery-method.active svg{ fill:#01AF67; stroke:#01AF67; }
+  .click-collect .icon svg{ width:22px; height:22px; }
+  .delivery-method.active span{ color:#01AF67; }
+
+  body{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif; background:#f8f9fa; color:#333; line-height:1.6; padding:20px; }
+  .sdev_hide_click-amp-collect{ display:none; }
+
+  .delivery-container{ max-width:500px; margin:0 auto; background:#fff; border-radius:0; box-shadow:none; overflow:hidden; border:1px solid #01AF67; }
+  .delivery-header{ padding:20px; border-bottom:1px solid #e1e8ed; }
+  .delivery-title{ font-size:16px; font-weight:600; color:#000; margin-bottom:16px; }
+  .delivery-methods{ display:flex; gap:12px; margin-bottom:20px; }
+
+  .delivery-method .icon{ font-size:1.2rem; }
+  .click-collect .icon{ color:#8b4513; }
+  .home-delivery .icon{ color:#01AF67; }
+  .delivery-method.active .icon{ color:#01AF67; }
+
+  .postcode-section{ margin-bottom:20px; }
+  .postcode-label{ font-size:16px; margin-bottom:8px; font-weight:400; color:#000; }
+  .postcode-input-container{ display:flex; gap:0; }
+  .postcode-input{ border-radius:0; border:1px solid #E1E1E1; border-right:none; width:calc(100% - 48px); height:46px; font-size:15px; color:#111; padding:10px 20px; }
+  .postcode-input:focus{ outline:none; box-shadow:none; }
+  .search-button{ background:#01AF67; color:#fff; border:none; padding:14px 18px; border-radius:0; cursor:pointer; transition:all .3s ease; min-width:50px; display:grid; place-items:center; }
+  .search-button:hover{ background:#0b9a5c; outline:none; box-shadow:none; }
+
+  .checkout-section{ padding:20px; text-align:center; }
+  .checkout-button{ width:100%; background:#bdc3c7; color:#fff; border:none; padding:16px; border-radius:8px; font-size:1rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; cursor:not-allowed; margin-bottom:12px; }
+  .checkout-button.enabled{ background:#01AF67; cursor:pointer; }
+  .checkout-button.enabled:hover{ background:#0b9a5c; }
+  .continue-shopping{ color:#01AF67; text-decoration:none; font-size:.9rem; border-bottom:1px solid #01AF67; }
+  .continue-shopping:hover{ color:#0b9a5c; border-bottom-color:#0b9a5c; }
+
+  .options-section{ padding:0 20px 20px; display:none; }
+  .options-section.show{ display:block; }
+  .option-item{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid #f1f3f4; }
+  .option-item:last-child{ border-bottom:none; }
+  .option-checkbox{ width:18px; height:18px; border:2px solid #e1e8ed; border-radius:3px; cursor:pointer; position:relative; transition:all .3s ease; }
+  .option-checkbox.checked{ background:#01AF67; border-color:#01AF67; }
+  .option-checkbox.checked::after{ content:'✓'; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-size:12px; font-weight:bold; }
+  .shipping-text,.option-text{ flex:1; color:#000; font-weight:600; font-size:15px; line-height:21px; display:flex; align-items:center; gap:8px; }
+  .option-link{ color:#01AF67; text-decoration:none; font-weight:600; font-size:14px; text-transform:capitalize; }
+  .option-link:hover{ text-decoration:underline; }
+  .shipping-option{ display:flex; align-items:center; gap:12px; padding:12px 0; }
+  .radio-button{ width:18px; height:18px; border:2px solid #e1e8ed; border-radius:50%; cursor:pointer; position:relative; transition:all .3s ease; }
+  .radio-button.selected{ border-color:#01AF67; }
+  .radio-button.selected::after{ content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:8px; height:8px; background:#01AF67; border-radius:50%; }
+  .info-icon{ color:#3498db; font-size:1rem; }
+
+  /* Locations */
+  .location-section{ padding:20px; display:none; }
+  .location-section.active{ display:block; }
+  .location-selection-label{ margin:0 0 16px; }
+
+  .location-item{ background:#fff; border-top:1px solid #e1e8ed; border-bottom:1px solid #e9eef2; border-left:none; border-right:none; padding:12px; margin-bottom:0; cursor:pointer; transition:all .2s ease; }
+  .location-item.selected{ border-color:#01AF67; background:#f8fffb; }
+
+  .sdev-location-header{ display:flex; justify-content:space-between; align-items:end; }
+  .sdev-location-name{ font-weight:600; font-size:15px; line-height:21px; color:#000; display:flex; align-items:center; gap:8px; }
+  .sdev-location-name:before{ border:1px solid #E4E4E4; content:""; width:20px; height:20px; display:inline-block; border-radius:50%; margin-right:8px; }
+  .location-item.selected .sdev-location-name:before{ border:6px solid #01AF67; }
+
+  .sdev-location-address br{ display:none; }
+  .sdev-location-address{ color:#000; padding:12px 0; display:none; line-height:1.4; }
+  .addressed_click_cmt{ display:flex; align-items:center; justify-content:space-between; gap:0; }
+
+  .sdev-stock-status{ display:flex; align-items:center; gap:8px; font-weight:600; font-size:14px; color:#01AF67; }
+  .sdev-stock-status.out-of-stock{ color:#e74c3c; }
+  .sdev-stock-indicator{ width:8px; height:8px; border-radius:50%; background:#01AF67; }
+  .sdev-stock-status.out-of-stock .sdev-stock-indicator{ background:#e74c3c; }
+
+  .loading{ text-align:center; padding:40px 20px; color:#7f8c8d; }
+  .loading.hidden{ display:none; }
+  .spinner{ width:40px; height:40px; border:4px solid #ecf0f1; border-top:4px solid #3498db; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 16px; }
+  @keyframes spin{ 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+
+  .error-message{ text-align:center; padding:20px; color:#e74c3c; background:#fdf2f2; border:1px solid #f5c6cb; border-radius:8px; margin:10px 0; }
+  .no-results{ text-align:center; padding:20px; color:#7f8c8d; }
+
+  @media (max-width:768px){
+    .delivery-container{ margin:0; border-radius:0; }
+    .delivery-methods{ flex-direction:column; }
+    .postcode-input-container{ flex-direction:column; }
+    .search-button{ width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="delivery-container">
+  <div class="delivery-header">
+    <h2 class="delivery-title">Delivery method</h2>
+
+    <div class="delivery-methods">
+      <div class="delivery-method click-collect active" data-method="collect">
+        <span class="icon">
+          <svg fill="#000" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><path d="M496.395 150.997 261.728 1.664a10.667 10.667 0 0 0-11.456 0L15.605 150.997A10.667 10.667 0 0 0 10.677 160v341.333c0 5.888 4.779 10.667 10.667 10.667h469.333c5.888 0 10.667-4.779 10.645-10.667V160c-.018-3.648-1.895-7.04-4.967-9.003zM309.344 490.667H202.677V416c0-29.397 23.936-53.333 53.333-53.333s53.333 23.936 53.333 53.333zM480.011 490.667H32.011V165.845l224-142.549 224 142.549z"/></svg>
+        </span>
+        <span>Click & Collect</span>
+      </div>
+
+      <div class="delivery-method home-delivery" data-method="delivery">
+        <span class="icon">
+          <svg fill="#000" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><path d="M53.336 0a10.833 10.833 0 0 0-9.899 6.699L.771 113.365A10.666 10.666 0 0 0 10.67 128h10.667v373.333c0 5.888 4.779 10.667 10.667 10.667h448c5.888 0 10.667-4.779 10.667-10.667V128h10.667a10.667 10.667 0 0 0 8.832-4.693 10.67 10.67 0 0 0 .405-9.942L468.568 6.699A10.667 10.667 0 0 0 458.67 0zm245.334 490.667h-85.333V384h85.333zM469.336 490.667H320.003V373.333c0-5.888-4.779-10.667-10.667-10.667H202.67c-5.888 0-10.667 4.779-10.667 10.667v117.333H42.67V128h426.667zM26.414 106.667l34.133-85.333h390.891l34.133 85.333z"/></svg>
+        </span>
+        <span>Home Delivery</span>
+      </div>
+    </div>
+
+    <!-- Postcode Input -->
+    <div class="postcode-section" id="postcode-section">
+      <div class="postcode-label" id="postcode-label">Search for a location to pick up your order:</div>
+      <div class="postcode-input-container">
+        <input type="text" class="postcode-input" placeholder="Enter Postcode" maxlength="6" id="postcode-input" value="400001">
+        <button class="search-button" id="search-button" aria-label="Search">
+          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Locations -->
+  <div>
+    <div class="location-section" id="location-section">
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>Loading stock information...</p>
+      </div>
+
+      <div class="location-selection-label">Please choose a pickup location:</div>
+      <div id="locations-list"><!-- populated by JS --></div>
+    </div>
+
+    <!-- Checkout (hidden by default in UI flow) -->
+    <div class="checkout-section" id="checkout-section" style="display:none !important">
+      <button class="checkout-button" id="checkout" disabled>CHECK OUT</button>
+      <a href="#" class="continue-shopping">Continue Shopping</a>
+    </div>
+  </div>
+
+  <!-- Delivery options -->
+  <div class="options-section" id="options-section">
+    <div class="option-item">
+      <div class="option-checkbox" id="authority-checkbox"></div>
+      <div class="option-text">Authority to leave</div>
+      <a href="#" class="option-link">More info</a>
+    </div>
+
+    <div class="shipping-option">
+      <div class="radio-button selected" id="standard-radio"></div>
+      <div class="shipping-text">Standard Shipping</div>
+      <div class="shipping-price">$9.95</div>
+    </div>
+
+    <div class="same-day-info">
+      <span>Looking for same-day delivery?</span>
+      <span class="info-icon">
+        <svg class="open" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="#01AF67" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M7.5 7.5H8V11H8.5" stroke="#01AF67" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M7.875 6C8.28921 6 8.625 5.66421 8.625 5.25C8.625 4.83579 8.28921 4.5 7.875 4.5C7.46079 4.5 7.125 4.83579 7.125 5.25C7.125 5.66421 7.46079 6 7.875 6Z" fill="#01AF67"></path>
+        </svg>
+      </span>
+    </div>
+  </div>
+</div>
+
 <script>
 /** ====== CONFIG ====== **/
-const PICKUP_API = "http://localhost:3000/api/pickup"; // your API
-const VARIANT_ID  = "46578436571392";                  // can be replaced by Liquid
-const DEFAULT_PRODUCT_ID = '{{ cart.items.first.product.id }}';
-const SHOP_DOMAIN = '{{shop.domain}}';
+const PICKUP_API = "http://localhost:3000/api/pickup"; // your pickup API
+const VARIANT_ID  = "46578436571392";                  // dummy variant id for API payload
 
 /** ====== DOM ====== **/
 const deliveryMethods = document.querySelectorAll('.delivery-method');
@@ -11,7 +186,7 @@ const postcodeLabel   = document.getElementById('postcode-label');
 const postcodeInput   = document.getElementById('postcode-input');
 const searchButton    = document.getElementById('search-button');
 const checkoutSection = document.getElementById('checkout-section');
-const checkoutButton  = document.querySelector('.checkout-button');
+const checkoutButton  = document.getElementById('checkout');
 const optionsSection  = document.getElementById('options-section');
 const locationSection = document.getElementById('location-section');
 const authorityCheckbox = document.getElementById('authority-checkbox');
@@ -34,24 +209,22 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
             Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
             Math.sin(dLon/2)**2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return +(R*c).toFixed(0); // km, rounded
+  return +(R*c).toFixed(0);
 }
 
 function formatAddressFromAPI(addr){
-  // Create an array like your UI expects (joined by <br>)
   const line1 = [addr?.address1, addr?.address2].filter(Boolean).join(', ');
   const line2 = [addr?.city, addr?.province].filter(Boolean).join(', ');
   const line3 = [addr?.country, addr?.zip].filter(Boolean).join(' - ');
   return [line1, line2, line3].filter(Boolean);
 }
 
-/** ====== GEO ====== **/
 async function getCustomerLocation() {
   return new Promise((resolve) => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-        ()  => resolve({ latitude: 30.7333, longitude: 76.7794 }) // Chandigarh fallback
+        ()  => resolve({ latitude: 30.7333, longitude: 76.7794 }) // fallback
       );
     } else {
       resolve({ latitude: 30.7333, longitude: 76.7794 });
@@ -60,11 +233,11 @@ async function getCustomerLocation() {
 }
 
 /** ====== INIT ====== **/
-async function init() {
+document.addEventListener('DOMContentLoaded', async () => {
   customerCoords = await getCustomerLocation();
   updateInterface();
   addEventListeners();
-}
+});
 
 function addEventListeners() {
   deliveryMethods.forEach(method => {
@@ -77,10 +250,9 @@ function addEventListeners() {
       selectedLocationId = null;
 
       setTimeout(() => {
-        const checkoutButton1 = document.querySelector('#checkout');
-        if (checkoutButton1) {
-          checkoutButton1.disabled = false;
-          checkoutButton1.classList.add('enabled');
+        if (checkoutButton) {
+          checkoutButton.disabled = false;
+          checkoutButton.classList.add('enabled');
         }
       }, 3000);
 
@@ -97,22 +269,21 @@ function addEventListeners() {
     if (e.key === 'Enter') searchLocations();
   });
 
-  // row select handler (kept from your code)
+  // row select → enable/disable checkout
   document.addEventListener("click", function (e) {
     const selectedItem = e.target.closest(".location-item");
     if (selectedItem) {
       document.querySelectorAll(".location-item").forEach(item => item.classList.remove("selected"));
       selectedItem.classList.add("selected");
 
-      const checkoutBtn = document.getElementById("checkout");
-      if (!checkoutBtn) return;
-
-      if (selectedItem.querySelector(".sdev-stock-status").classList.contains("out-of-stock")) {
-        checkoutBtn.disabled = true;
-        checkoutBtn.classList.add("disabled");
-      } else {
-        checkoutBtn.disabled = false;
-        checkoutBtn.classList.remove("disabled");
+      if (checkoutButton) {
+        if (selectedItem.querySelector(".sdev-stock-status").classList.contains("out-of-stock")) {
+          checkoutButton.disabled = true;
+          checkoutButton.classList.add("disabled");
+        } else {
+          checkoutButton.disabled = false;
+          checkoutButton.classList.remove("disabled");
+        }
       }
     }
   });
@@ -125,10 +296,9 @@ function updateInterface() {
 
     if (hasSearched) {
       setTimeout(() => {
-        const checkoutButton1 = document.querySelector('#checkout');
-        if (checkoutButton1) {
-          checkoutButton1.disabled = false;
-          checkoutButton1.classList.add('enabled');
+        if (checkoutButton) {
+          checkoutButton.disabled = false;
+          checkoutButton.classList.add('enabled');
         }
       }, 5000);
       optionsSection.classList.remove('show');
@@ -151,10 +321,7 @@ function updateInterface() {
 /** ====== SEARCH (uses /api/pickup) ====== **/
 async function searchLocations() {
   const postcode = postcodeInput.value.trim();
-  if (!postcode) {
-    alert('Please enter a postcode');
-    return;
-  }
+  if (!postcode) { alert('Please enter a postcode'); return; }
 
   if (selectedMethod === 'collect') {
     hasSearched = true;
@@ -171,25 +338,14 @@ async function loadPickupFromAPI(postcode) {
   locationsList.innerHTML = '';
 
   try {
-    const body = JSON.stringify({
-      pincode: postcode,
-      variantId: VARIANT_ID,
-      radiusKm: 100
-    });
-
-    const res = await fetch(PICKUP_API, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body
-    });
+    const body = JSON.stringify({ pincode: postcode, variantId: VARIANT_ID, radiusKm: 100 });
+    const res = await fetch(PICKUP_API, { method:'POST', headers:{'Content-Type':'application/json'}, body });
 
     if (!res.ok) throw new Error('Pickup API error');
     const data = await res.json();
 
-    // Merge inRadius and outOfRadius to one list (nearest first)
     const merged = [...(data.inRadius || []), ...(data.outOfRadius || [])];
 
-    // Normalize to what your renderer expects
     const normalized = merged.map(loc => {
       const formatted = formatAddressFromAPI(loc.address);
       const distKm = loc.distanceKm ?? (
@@ -201,9 +357,9 @@ async function loadPickupFromAPI(postcode) {
       return {
         id: loc.locationId,
         name: loc.name,
-        distance: distKm, // number | null
-        status: String(loc.status || '').toLowerCase(), // 'instock' | 'out_of_stock'
-        address: { formatted }, // keep same structure your UI uses
+        distance: distKm,
+        status: String(loc.status || '').toLowerCase(), // 'instock', 'out_of_stock'
+        address: { formatted },
         raw: loc
       };
     });
@@ -223,14 +379,10 @@ function displayLocations(locations) {
   locationsList.innerHTML = '';
 
   if (!locations.length) {
-    locationsList.innerHTML = `
-      <div class="no-results">
-        <p>No locations found for the entered postcode.</p>
-      </div>`;
+    locationsList.innerHTML = `<div class="no-results"><p>No locations found for the entered postcode.</p></div>`;
     return;
   }
 
-  // sort by distance when available
   locations.sort((a,b)=>{
     if (a.distance == null && b.distance == null) return 0;
     if (a.distance == null) return 1;
@@ -242,10 +394,11 @@ function displayLocations(locations) {
     const el = createLocationElement(location);
     locationsList.appendChild(el);
 
-    // Select first in-stock by default
+    // select first in-stock by default
     if (idx === 0 && location.status === 'instock') {
       el.classList.add('selected');
       selectedLocationId = location.id;
+      updateCheckoutButtonState();
     }
   });
 }
@@ -256,18 +409,16 @@ function createLocationElement(location) {
   const isInStock = location.status === 'instock';
   const stockStatusClass = isInStock ? '' : 'out-of-stock';
   const stockStatusText  = isInStock ? 'In stock' : 'Out of stock';
+  const distanceStr = (location.distance != null) ? `${location.distance} km` : '';
 
   div.className = `location-item ${stockStatusClass}`;
   div.dataset.locationId = location.id;
-
-  const distanceStr = (location.distance != null) ? `${location.distance} km` : '';
 
   div.innerHTML = `
     <div class="sdev-location-header">
       <div class="sdev-location-name">
         <div class="sdev-location-selector"></div>
-        ${location.name}
-        <span class="sdev-location-distance">${distanceStr}</span>
+        ${escapeHTML(location.name)} <span class="sdev-location-distance">${distanceStr}</span>
       </div>
       <div class="sdev-stock-status ${stockStatusClass}">
         <div class="sdev-stock-indicator"></div>
@@ -275,56 +426,27 @@ function createLocationElement(location) {
       </div>
     </div>
     <div class="addressed_click_cmt">
-      <div class="sdev-location-address">
-        ${location.address.formatted.join('<br>')}
-      </div>
+      <div class="sdev-location-address">${location.address.formatted.map(escapeHTML).join('<br>')}</div>
     </div>
   `;
 
-  // Click to select + expand (matches your CSS)
+  // click to select & expand
   div.addEventListener('click', () => {
     document.querySelectorAll('.location-item').forEach(item => item.classList.remove('selected'));
     div.classList.add('selected');
     selectedLocationId = location.id;
-
-    addToCartWithLocation(location);
     updateCheckoutButtonState();
   });
 
   return div;
 }
 
-/** ====== CART TAGGING (kept) ====== **/
-function addToCartWithLocation(location) {
-  const data = {
-    id: "46950237503744", // your meta item / variant used to carry pickup info
-    quantity: 1,
-    properties: {
-      Address: `${location.address.formatted.join(', ')}`,
-      'Pickup Location': location.name,
-      'Location ID': location.id
-    }
-  };
-
-  fetch('/cart/add.js', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  })
-  .then(r => r.json())
-  .then(() => {
-    console.log('Item added to cart with location:', location.name);
-    localStorage.setItem("lastAddedVariant", '46950237503744');
-  })
-  .catch(err => console.error('Error adding item to cart:', err));
-}
+function escapeHTML(s){ return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
 /** ====== UI UTILS ====== **/
 function showLoading(){ loading.classList.remove('hidden'); locationsList.innerHTML=''; }
 function hideLoading(){ loading.classList.add('hidden'); }
-function showError(message){
-  locationsList.innerHTML = `<div class="error-message"><p>${message}</p></div>`;
-}
+function showError(message){ locationsList.innerHTML = `<div class="error-message"><p>${message}</p></div>`; }
 
 function updateCheckoutButtonState() {
   if (selectedMethod === 'collect') {
@@ -340,36 +462,6 @@ function updateCheckoutButtonState() {
     checkoutButton.disabled = false;
   }
 }
-
-/** ====== LIFECYCLE ====== **/
-document.addEventListener('DOMContentLoaded', init);
-
-// remove the meta item when leaving (kept)
-window.addEventListener("beforeunload", function () {
-  const targetVariantId = "46950237503744";
-  fetch('/cart.js')
-    .then(res => res.json())
-    .then(cart => {
-      const updates = {};
-      cart.items.forEach(item => {
-        if (item.variant_id == targetVariantId) updates[item.key] = 0;
-      });
-      if (Object.keys(updates).length > 0) {
-        return fetch('/cart/update.js', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updates })
-        });
-      }
-    })
-    .catch(err => console.error("Error removing target item:", err));
-});
-
-// refresh if that meta item was just added (kept)
-if (localStorage.getItem("lastAddedVariant") === "46950237503744") {
-  localStorage.removeItem("lastAddedVariant");
-  setTimeout(() => {
-    window.location.href = window.location.href.split('#')[0] + '?reload=' + new Date().getTime();
-  }, 2000);
-}
 </script>
+</body>
+</html>
