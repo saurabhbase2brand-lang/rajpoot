@@ -24,24 +24,6 @@
           "type": "subtotal",
           "settings": {}
         },
-        "cnc_delivery_method_p88TUM": {
-          "type": "shopify://apps/cnc/blocks/delivery-method/83f669e1-d792-41a3-95ae-830d48570c04",
-          "settings": {
-            "cart__ctas": "cart__ctas",
-            "main_title": "SELECT A DELIVERY METHOD:",
-            "clc_title": "Click & Collect",
-            "clc_home_title": "Home Delivery",
-            "clc_search_title": "Search for a location to pick up your order:",
-            "button_color": "#007bff",
-            "hover_button_color": "#007bff",
-            "title_tab_color": "#007bff",
-            "looking_for_delivery": "Looking for Same Day Delivery?",
-            "standard_ship_title": "Standard Shipping Melb Metro",
-            "standard_ship_price": "$6.00",
-            "authority_to_leave": "Authority to leave",
-            "more_info": "more info"
-          }
-        },
         "buttons": {
           "type": "buttons",
           "settings": {}
@@ -49,7 +31,6 @@
       },
       "block_order": [
         "subtotal",
-        "cnc_delivery_method_p88TUM",
         "buttons"
       ],
       "settings": {
