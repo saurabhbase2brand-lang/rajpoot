@@ -113,12 +113,8 @@
 <script>
 /* ======== CONFIG ======== */
 const PICKUP_API          = "https://6d63ab86a3e8.ngrok-free.app/api/pickup";
-let   VARIANT_ID          = null;                  // set to "1234567890" to lock validation to a specific variant
+let   VARIANT_ID          = null;                  // set like "46578436571392" if you want to lock to one variant
 const PICKUP_META_VARIANT = "46950237503744";
-
-/* ======== STORAGE KEYS ======== */
-const SAVED_LOC_KEY = 'pickup.selectedLocation';
-const SAVED_PC_KEY  = 'pickup.lastPostcode';
 
 /* ======== DOM ======== */
 const deliveryMethods = document.querySelectorAll('.delivery-method');
@@ -135,8 +131,10 @@ let selectedMethod   = 'collect';
 let selectedLocation = null;
 let customerCoords   = null;
 
-/* ======== UTILS ======== */
+/* ======== SMALL UTILS ======== */
 const escapeHTML = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+function setCheckoutEnabled(on){ checkoutButton.classList.toggle('disabled',!on); checkoutButton.disabled=!on; }
+function showQtyError(msg){ qtyErrorEl.textContent = msg || ""; qtyErrorEl.classList.toggle('hidden', !msg); }
 function formatAddress(a){
   const line1=[a?.address1,a?.address2].filter(Boolean).join(', ');
   const line2=[a?.city,a?.province].filter(Boolean).join(', ');
@@ -149,36 +147,13 @@ function calculateDistance(lat1, lon1, lat2, lon2){
   const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
   return +(2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(2);
 }
-function setCheckoutEnabled(on){ checkoutButton.classList.toggle('disabled',!on); checkoutButton.disabled=!on; }
-function showLoading(on){ loading.classList.toggle('hidden',!on); }
-function showQtyError(msg){
-  qtyErrorEl.textContent = msg || "";
-  qtyErrorEl.classList.toggle('hidden', !msg);
-}
 
 /* ======== STORAGE ======== */
-function persistSelection(location){
-  try{
-    const payload = {
-      id: location.id || location.raw?.locationId || null,
-      name: location.name,
-      available: Number(location.available ?? 0),
-      address: location.address,
-      raw: location.raw ?? null
-    };
-    localStorage.setItem(SAVED_LOC_KEY, JSON.stringify(payload));
-  }catch(e){ console.warn('persistSelection failed', e); }
-}
-function readSavedSelection(){
-  try{ return JSON.parse(localStorage.getItem(SAVED_LOC_KEY) || 'null'); }
-  catch{ return null; }
-}
-function persistPostcode(pc){
-  try{ localStorage.setItem(SAVED_PC_KEY, String(pc||'')); }catch{}
-}
-function readSavedPostcode(){
-  try{ return localStorage.getItem(SAVED_PC_KEY) || ''; }catch{ return ''; }
-}
+const SAVED_LOC_KEY='pickup.selectedLocation', SAVED_PC_KEY='pickup.lastPostcode';
+const persistSelection = loc => { try{ localStorage.setItem(SAVED_LOC_KEY, JSON.stringify(loc)); }catch{} };
+const readSavedSelection = ()=>{ try{ return JSON.parse(localStorage.getItem(SAVED_LOC_KEY)||'null'); }catch{ return null; } };
+const persistPostcode = pc => { try{ localStorage.setItem(SAVED_PC_KEY, String(pc||'')); }catch{} };
+const readSavedPostcode = ()=>{ try{ return localStorage.getItem(SAVED_PC_KEY) || '';}catch{ return ''; } };
 function deriveZipFromSaved(sel){
   if (!sel) return '';
   const z = sel?.raw?.address?.zip || sel?.address?.zip || '';
@@ -189,63 +164,50 @@ function deriveZipFromSaved(sel){
 }
 
 /* ======== CART HELPERS ======== */
+async function getLiveCart(){
+  try{ const r=await fetch('/cart.js',{credentials:'same-origin',cache:'no-store'}); return await r.json(); }
+  catch(e){ console.error('getLiveCart error', e); return {items:[]}; }
+}
+async function getTargetVariantId(){
+  if (VARIANT_ID) return String(VARIANT_ID);
+  const cart = await getLiveCart();
+  const line = (cart.items||[]).find(i => String(i.properties?.__pickup_meta) !== 'true');
+  return line ? String(line.variant_id) : null;
+}
+function qtyForVariant(cart, variantId){
+  let q=0; (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===String(variantId)) q+=Number(i.quantity||0); });
+  return q;
+}
+
+/* ======== PICKUP META: ALWAYS 1 QTY ======== */
+async function ensurePickupMetaOne(props){
+  const cart = await getLiveCart();
+  const metas = (cart.items||[]).filter(i=>String(i.variant_id)===String(PICKUP_META_VARIANT));
+  if (!metas.length){
+    // add one
+    await fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({id:PICKUP_META_VARIANT,quantity:1,properties:props})});
+    return;
+  }
+  // set first to qty 1 + update props
+  const first = metas[0];
+  await fetch('/cart/change.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({id:first.key,quantity:1,properties:props})});
+  // remove any extra meta lines
+  if (metas.length>1){
+    const updates={}; metas.slice(1).forEach(m=>{ updates[m.key]=0; });
+    await fetch('/cart/update.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({updates})});
+  }
+}
+
+/* ======== CLEANUP: REMOVE META WHEN NEEDED ======== */
 async function removePickupMeta(){
   try{
-    const cart=await fetch('/cart.js',{credentials:'same-origin'}).then(r=>r.json());
+    const cart=await getLiveCart();
     const updates={};
-    (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===PICKUP_META_VARIANT) updates[i.key]=0; });
+    (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===String(PICKUP_META_VARIANT)) updates[i.key]=0; });
     if(Object.keys(updates).length){
       await fetch('/cart/update.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({updates})});
     }
   }catch(e){ console.error('[pickup] remove error',e); }
-}
-
-async function getLiveCart(){
-  try{
-    const res = await fetch('/cart.js', { credentials:'same-origin', cache:'no-store' });
-    return await res.json();
-  }catch(e){
-    console.error('getLiveCart error', e);
-    return { items: [] };
-  }
-}
-// choose which variant to validate: configured id or first non-meta line
-async function getTargetVariantId(){
-  if (VARIANT_ID) return String(VARIANT_ID);
-  const cart = await getLiveCart();
-  const line = (cart.items || []).find(i => !String(i.properties?.__pickup_meta).includes('true'));
-  return line ? String(line.variant_id) : null;
-}
-function qtyForVariant(cart, variantId){
-  let q = 0;
-  (cart.items || []).forEach(i => { if (String(i.variant_id) === String(variantId)) q += Number(i.quantity || 0); });
-  return q;
-}
-
-let addingPickupMeta=false;
-async function addOrUpdatePickupMeta(location){
-  if(addingPickupMeta) return;
-  addingPickupMeta=true;
-  try{
-    const cart=await fetch('/cart.js',{credentials:'same-origin'}).then(r=>r.json());
-    let existing=null;
-    (cart.items||[]).forEach(i=>{ if(String(i.variant_id)===PICKUP_META_VARIANT) existing=i; });
-
-    const props={
-      'Pickup Location':location.name,
-      'Location ID':location.id||location.raw?.locationId||'',
-      'Address':(location.address?.formatted||[]).join(', '),
-      'Available At Location': String(location.available ?? ''),
-      '__pickup_meta':'true'
-    };
-
-    if(!existing){
-      await fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({id:PICKUP_META_VARIANT,quantity:1,properties:props})}).then(r=>r.json());
-    }else{
-      await fetch('/cart/change.js',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({id:existing.key,quantity:1,properties:props})}).then(r=>r.json());
-    }
-  }catch(e){ console.error('[pickup] add/update error',e); }
-  finally{ addingPickupMeta=false; }
 }
 
 /* ======== GEO ======== */
@@ -263,10 +225,11 @@ function getCustomerLocation(){
 /* ======== INIT ======== */
 document.addEventListener('DOMContentLoaded', async ()=>{
   await removePickupMeta();
+  customerCoords = await getCustomerLocation();
+
   const savedSel = readSavedSelection();
   const savedPC  = readSavedPostcode() || deriveZipFromSaved(savedSel) || postcodeInput.value || '';
   if (savedPC) postcodeInput.value = savedPC;
-  customerCoords=await getCustomerLocation();
 
   deliveryMethods.forEach(m=>{
     m.addEventListener('click', async ()=>{
@@ -293,48 +256,62 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   searchButton.addEventListener('click', onSearch);
   postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSearch(); });
 
-  // ✅ Validate strictly on checkout click based on CURRENT selected row
+  // checkout guard
   checkoutButton.addEventListener('click', onCheckoutClick);
 
   locationSection.classList.add('active');
-  if (savedPC) {
-    await loadPickup(savedPC, savedSel?.id || savedSel?.raw?.locationId || null);
-  }
+
+  if (savedPC) await loadPickup(savedPC, savedSel?.id || savedSel?.raw?.locationId || null);
 });
 
 window.addEventListener('pageshow', async ()=>{ await removePickupMeta(); });
 document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible'){ await removePickupMeta(); }});
 
-/* ======== CHECKOUT CLICK VALIDATION ======== */
+/* ======== CHECKOUT CLICK: VALIDATE SELECTED LOCATION ======== */
 async function onCheckoutClick(e){
   e.preventDefault();
   e.stopPropagation();
 
-  if (selectedMethod === 'collect') {
-    const row = document.querySelector('.location-item.selected');
-    if (!row){
-      showQtyError("Please choose a pickup location first.");
-      setCheckoutEnabled(false);
-      return;
-    }
-
-    // get selected location's available & name from dataset
-    const locName   = row.dataset.name || 'Selected location';
-    const available = Number(row.dataset.available || 0);
-
-    // live cart + target variant qty
-    const cart  = await getLiveCart();
-    const vid   = await getTargetVariantId();
-    const qty   = vid ? qtyForVariant(cart, vid) : 0;
-
-    if (qty > available){
-      showQtyError(`"${locName}" par sirf ${available} available hai. Aapke cart me ${qty} items hain. Qty kam karo ya doosri location choose karo.`);
-      setCheckoutEnabled(false);
-      return; // block checkout
-    }
+  if (selectedMethod !== 'collect'){
+    // normal delivery – just go
+    window.location.href='/checkout';
+    return;
   }
 
-  // ok to proceed
+  const row = document.querySelector('.location-item.selected');
+  if (!row){
+    showQtyError("Please choose a pickup location first.");
+    setCheckoutEnabled(false);
+    return;
+  }
+
+  // read selected row data
+  const locName   = row.dataset.name || 'Selected location';
+  const available = Number(row.dataset.available || 0);
+
+  // live cart qty for target variant
+  const cart  = await getLiveCart();
+  const vid   = await getTargetVariantId(); // auto-picks first non-meta if VARIANT_ID not set
+  const qty   = vid ? qtyForVariant(cart, vid) : 0;
+
+  // hard check
+  if (qty > available){
+    showQtyError(`"${locName}" par sirf ${available} available hai. Aapke cart me ${qty} items hain. Qty kam karo ya doosri location choose karo.`);
+    setCheckoutEnabled(false);
+    return; // block checkout
+  }
+
+  // enforce pickup meta = 1 (always)
+  const props={
+    'Pickup Location': locName,
+    'Location ID': row.dataset.locationId || selectedLocation?.id || '',
+    'Address': (selectedLocation?.address?.formatted||[]).join(', '),
+    'Available At Location': String(available),
+    '__pickup_meta':'true'
+  };
+  await ensurePickupMetaOne(props);
+
+  // proceed
   showQtyError("");
   setCheckoutEnabled(true);
   window.location.href='/checkout';
@@ -366,21 +343,9 @@ async function loadPickup(pincode, preferredId=null){
 
     const list=[...(data.inRadius||[]),...(data.outOfRadius||[])].map(loc=>{
       const formatted=formatAddress(loc.address);
-      const dist=typeof loc.distanceKm==='number'?loc.distanceKm:calculateDistance(
-        customerCoords?.latitude,customerCoords?.longitude,
-        loc.coordinates?.lat,loc.coordinates?.lng
-      );
-      const available = Number(
-        loc.available ?? loc.onHand ?? loc.quantity ?? loc.stock ?? (loc.raw && loc.raw.available) ?? 0
-      );
-      return{
-        id:loc.locationId||loc.id,
-        name:loc.name,
-        distance:dist,
-        available,
-        address:{formatted},
-        raw:loc
-      };
+      const dist=typeof loc.distanceKm==='number'?loc.distanceKm:calculateDistance(customerCoords?.latitude,customerCoords?.longitude,loc.coordinates?.lat,loc.coordinates?.lng);
+      const available=Number(loc.available ?? loc.onHand ?? loc.quantity ?? loc.stock ?? (loc.raw && loc.raw.available) ?? 0);
+      return { id:loc.locationId||loc.id, name:loc.name, distance:dist, available, address:{formatted}, raw:loc };
     });
 
     renderLocations(list, preferredId);
@@ -392,16 +357,13 @@ async function loadPickup(pincode, preferredId=null){
 
 function renderLocations(list, preferredId=null){
   locationsList.innerHTML='';
-  if(!list.length){
-    locationsList.innerHTML='<div class="no-results">No locations found for the entered postcode.</div>';
-    return;
-  }
+  if(!list.length){ locationsList.innerHTML='<div class="no-results">No locations found for the entered postcode.</div>'; return; }
   list.sort((a,b)=> (a.distance??1e9)-(b.distance??1e9));
   list.forEach(loc=>locationsList.appendChild(locationRow(loc)));
 
   if (preferredId){
-    const match = locationsList.querySelector(`.location-item[data-location-id="${CSS.escape(preferredId)}"]`);
-    if (match){ match.querySelector('[data-select]')?.click(); return; }
+    const m = locationsList.querySelector(`.location-item[data-location-id="${CSS.escape(preferredId)}"]`);
+    if (m){ m.querySelector('[data-select]')?.click(); return; }
   }
   const first = locationsList.querySelector('.location-item');
   if (first){ first.querySelector('[data-select]')?.click(); }
@@ -414,7 +376,6 @@ function locationRow(location){
 
   div.className='location-item';
   div.dataset.locationId=location.id;
-  // ⬇️ store for checkout-time validation
   div.dataset.available = Number(location.available ?? 0);
   div.dataset.name = location.name;
 
@@ -461,9 +422,7 @@ function locationRow(location){
     };
     persistSelection(selectedLocation);
 
-    await addOrUpdatePickupMeta(selectedLocation);
-
-    // checkout state is controlled at click-time; keep button enabled for UX
+    // keep button enabled; final guard happens on checkout click
     setCheckoutEnabled(true);
     showQtyError("");
   });
@@ -482,6 +441,7 @@ function locationRow(location){
   return div;
 }
 </script>
+
 
 </body>
 </html>
