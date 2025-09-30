@@ -59,83 +59,91 @@
 <script>
 (function(){
   /* ===== config ===== */
-  const API_BASE = "https://YOUR-SERVER-OR-NGROK.com"; // <- change to your domain
+  // ⚠️ Use a valid HTTPS endpoint (avoid mixed content). Change this to your server:
+  const API_BASE = "https://6d63ab86a3e8.ngrok-free.app";
   const PICKUP_ENDPOINT = API_BASE + "/api/pickup";
   const RADIUS_KM = 100;
-  const VARIANT_ID = "46578436571392"; // not used for UI—kept to match your API signature
+  const VARIANT_ID = "46578436571392";
+
+  /* ===== polyfills / helpers ===== */
+  if (!window.CSS) window.CSS = {};
+  if (!CSS.escape) {
+    CSS.escape = function (sel) {
+      return String(sel).replace(/([ #;?%&,.+*~':"!^$[\]()=>|\/@])/g,'\\$1');
+    };
+  }
+  function safeGet(obj, path, fallback){
+    try{
+      return path.split('.').reduce((o,k)=> (o && (k in o)) ? o[k] : undefined, obj) ?? fallback;
+    }catch{return fallback;}
+  }
+  function escapeHtml(s){return String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+  function badge(status){
+    const ok = /instock|in_stock/i.test(String(status||''));
+    return `<span class="cnc-badge ${ok?'cnc-in':'cnc-out'}">${ok?'✔ In stock':'✖ Out of stock'}</span>`;
+  }
+  function address(a){
+    if(!a) return '';
+    const parts = [
+      a.address1, a.address2,
+      [a.city,a.province].filter(Boolean).join(', '),
+      [a.country,a.zip].filter(Boolean).join(' - ')
+    ].filter(Boolean);
+    return parts.join('<br>');
+  }
+  function deriveZipFromSaved(sel){
+    if (!sel) return '';
+    const rawZip = safeGet(sel,'raw.address.zip','') || safeGet(sel,'address.zip','');
+    if (rawZip) return String(rawZip);
+    const flat = Array.isArray(safeGet(sel,'address.formatted',[])) ? sel.address.formatted.join(' ') : (safeGet(sel,'address.formatted','') || '');
+    const m = String(flat).match(/\b\d{4,6}\b/);
+    return m ? m[0] : '';
+  }
 
   /* ===== dom ===== */
-  const toggleBtn = document.getElementById('cnc-toggle-btn');
-  const searchBox = document.getElementById('cnc-search-box');
+  const toggleBtn     = document.getElementById('cnc-toggle-btn');
+  const searchBox     = document.getElementById('cnc-search-box');
   const postcodeInput = document.getElementById('cnc-postcode');
-  const searchBtn = document.getElementById('cnc-search-btn');
-  const resultsBox = document.getElementById('cnc-results');
+  const searchBtn     = document.getElementById('cnc-search-btn');
+  const resultsBox    = document.getElementById('cnc-results');
 
   /* ===== saved selection ===== */
   const SAVED_KEY = 'pickup.selectedLocation';
   let savedSelection = null;
-  try { savedSelection = JSON.parse(localStorage.getItem(SAVED_KEY) || 'null'); } catch(e) {}
-
-  /* ===== helpers ===== */
-  const escapeHtml = s => (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m]));
-  const badge = (status)=>{
-    const ok = /instock|in_stock/i.test(status || '');
-    return `<span class="cnc-badge ${ok?'cnc-in':'cnc-out'}">${ok ? '✔ In stock' : '✖ Out of stock'}</span>`;
-  };
-  const address = (a)=>{
-    const parts = [
-      a?.address1, a?.address2,
-      [a?.city,a?.province].filter(Boolean).join(', '),
-      [a?.country,a?.zip].filter(Boolean).join(' - ')
-    ].filter(Boolean);
-    return parts.join('<br>');
-  };
-  function deriveZipFromSaved(sel){
-    if (!sel) return '';
-    const rawZip = sel?.raw?.address?.zip;
-    if (rawZip) return String(rawZip);
-    const flat = Array.isArray(sel?.address?.formatted) ? sel.address.formatted.join(' ') : (sel?.address?.formatted || '');
-    const m = flat.match(/\b\d{4,6}\b/);
-    return m ? m[0] : '';
-  }
+  try { savedSelection = JSON.parse(localStorage.getItem(SAVED_KEY) || 'null'); } catch(e) { savedSelection = null; }
 
   /* ===== templating ===== */
   const rowTpl = (loc, idx)=>`
     <div class="cnc-item" data-idx="${idx}" data-id="${escapeHtml(loc.locationId || loc.id || '')}">
       <div class="cnc-row" data-toggle>
         <input class="cnc-radio" type="radio" name="cnc-pickup" aria-label="Select ${escapeHtml(loc.name)}" />
-        <div class="cnc-name">${escapeHtml(loc.name)}</div>
+        <div class="cnc-name">${escapeHtml(loc.name||'Unknown')}</div>
         <div class="cnc-distance">${Number(loc.distanceKm||0).toFixed(2)} km</div>
         ${badge(loc.status)}
-        <svg class="cnc-caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 10l5 5 5-5z" fill="#94a3b8"/>
-        </svg>
+        <svg class="cnc-caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z" fill="#94a3b8"/></svg>
       </div>
       <div class="cnc-detail">${address(loc.address)}</div>
     </div>
   `;
-
   function emitSelected(location){
-    window.dispatchEvent(new CustomEvent('cnc:pickupSelected', { detail: { location } }));
+    try { window.dispatchEvent(new CustomEvent('cnc:pickupSelected', { detail: { location } })); }
+    catch(e){ console.warn('emitSelected failed', e); }
   }
 
   function renderResults(payload, preferredId){
-    // Prefer inRadius (<=100km). If your API guarantees it, you can just use inRadius.
-    let list = (payload.inRadius || []);
-    if (!list.length) list = [ ...(payload.inRadius||[]), ...(payload.outOfRadius||[]) ];
-
+    const inR  = Array.isArray(payload?.inRadius) ? payload.inRadius : [];
+    const outR = Array.isArray(payload?.outOfRadius) ? payload.outOfRadius : [];
+    let list = inR.length ? inR : [...inR, ...outR]; // only fall back if no inRadius
     if(!list.length){
       resultsBox.innerHTML = `<div class="cnc-empty">No nearby stores found.</div>`;
       return;
     }
-
     resultsBox.innerHTML = list.map(rowTpl).join('');
     const items = Array.from(resultsBox.querySelectorAll('.cnc-item'));
 
     items.forEach((item, i)=>{
       const radio  = item.querySelector('.cnc-radio');
       const header = item.querySelector('[data-toggle]');
-
       const selectThis = ()=>{
         resultsBox.querySelectorAll('.cnc-radio').forEach(r=>r.checked=false);
         resultsBox.querySelectorAll('.cnc-item').forEach(el=>el.classList.remove('cnc-open'));
@@ -143,22 +151,23 @@
         item.classList.add('cnc-open');
         emitSelected(list[i]);
       };
-
       header.addEventListener('click', e=>{ if(e.target!==radio) selectThis(); });
       radio.addEventListener('change', ()=>{ if(radio.checked) selectThis(); });
     });
 
-    // Prefer saved location if present
+    // Prefer saved location
     let selected = null;
     if (preferredId){
-      const matchEl = resultsBox.querySelector(`.cnc-item[data-id="${CSS.escape(preferredId)}"]`);
+      const idSel = `.cnc-item[data-id="${CSS.escape(preferredId)}"]`;
+      const matchEl = resultsBox.querySelector(idSel);
       if (matchEl){
-        matchEl.querySelector('.cnc-radio').checked = true;
+        const r = matchEl.querySelector('.cnc-radio');
+        if (r) r.checked = true;
         matchEl.classList.add('cnc-open');
         selected = list[Number(matchEl.getAttribute('data-idx'))];
       }
     }
-    // Fallback to first item
+    // Fallback
     if(!selected){
       const firstItem  = resultsBox.querySelector('.cnc-item');
       const firstRadio = resultsBox.querySelector('.cnc-radio');
@@ -172,23 +181,25 @@
   }
 
   async function search(postcode, preferredId){
+    if(!postcode){ resultsBox.innerHTML = `<div class="cnc-error">Please enter a postcode.</div>`; return; }
     resultsBox.innerHTML = `<div class="cnc-loader">Checking stock…</div>`;
     try{
       const res = await fetch(PICKUP_ENDPOINT, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
+        mode:'cors',
         body: JSON.stringify({
           pincode: String(postcode||'').trim(),
           variantId: VARIANT_ID,
           radiusKm: RADIUS_KM
         })
       });
-      if(!res.ok) throw new Error('Network error');
+      if(!res.ok) throw new Error('Network error: ' + res.status);
       const data = await res.json();
       renderResults(data, preferredId);
     }catch(e){
-      console.error(e);
-      resultsBox.innerHTML = `<div class="cnc-error">Unable to fetch stock. Please try again.</div>`;
+      console.error('Pickup API error:', e);
+      resultsBox.innerHTML = `<div class="cnc-error">Unable to fetch stock. Check API URL / CORS / HTTPS, then try again.</div>`;
     }
   }
 
@@ -200,20 +211,17 @@
     if (!visible) resultsBox.innerHTML = '';
   });
 
-  /* ===== open-by-default boot flow ===== */
+  /* ===== boot: open by default, auto-fill from saved selection ===== */
   document.addEventListener('DOMContentLoaded', async ()=>{
-    // make sure it's visible now
     searchBox.style.display = 'flex';
     resultsBox.innerHTML = '';
 
-    // if we have a saved location, prefill & search, preselect that store
-    const preferredId = savedSelection?.id || savedSelection?.raw?.locationId || null;
+    const preferredId = safeGet(savedSelection,'id',null) || safeGet(savedSelection,'raw.locationId',null);
     const zip = deriveZipFromSaved(savedSelection);
     if (zip) {
       postcodeInput.value = zip;
       await search(zip, preferredId);
     } else {
-      // no saved zip -> just focus the input
       postcodeInput.focus();
     }
   });
@@ -223,5 +231,6 @@
   postcodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') search(postcodeInput.value, null); });
 })();
 </script>
+
 </body>
 </html>
