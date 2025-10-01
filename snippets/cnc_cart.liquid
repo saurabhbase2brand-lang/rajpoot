@@ -124,10 +124,11 @@ let   VARIANT_ID = null; // optional: set to a string to lock validation to that
 const RADIUS_KM = 50;
 
 // Resolve the shop domain safely (fallback for testing)
-const MY_SHOP_DOMAIN =
+{% comment %} const MY_SHOP_DOMAIN =
   (window.Shopify && window.Shopify.shop) ||
   (typeof __st !== 'undefined' && __st && __st.slug) ||
-  "clickandcollect1234.myshopify.com";
+  "clickandcollect1234.myshopify.com"; {% endcomment %}
+  const MY_SHOP_DOMAIN ="clickandcollect1234.myshopify.com";
 
 /* ======== STORAGE KEYS ======== */
 const SAVED_KEY = 'pickup.selectedLocation';
