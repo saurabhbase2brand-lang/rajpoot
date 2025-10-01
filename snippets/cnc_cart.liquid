@@ -111,37 +111,29 @@
 </div>
 
 <script>
-/* ===== prevent double init (stops "already declared") ===== */
+/* ========= PREVENT DOUBLE-INIT ========= */
 if (window.__pickupWidgetInitialized) {
-  console.debug("Pickup widget already initialized — skipping.");
+  console.debug("Pickup widget already initialized. Skipping.");
 } else {
   window.__pickupWidgetInitialized = true;
 
-/* ===== config ===== */
+/* ======== CONFIG ======== */
 const PICKUP_API = "https://rows-driver-upgrading-steady.trycloudflare.com/api/pickup";
-
-/** Toggle these if you want to hard-pin values (helps avoid 403 due to mismatches) */
-const USE_STATIC_SHOP_DOMAIN = true;
-const STATIC_SHOP_DOMAIN     = "clickandcollect1234.myshopify.com";
-const USE_STATIC_VARIANT     = true;
-const STATIC_VARIANT_ID      = "47230794924287";
-
 const PICKUP_META_VARIANT = "46950237503744";
+let   VARIANT_ID = null; // optional: set to a string to lock validation to that variant
+const RADIUS_KM = 50;
 
-/* ===== resolve shop domain and variant ===== */
+// Resolve the shop domain safely (fallback for testing)
 const MY_SHOP_DOMAIN =
-  (USE_STATIC_SHOP_DOMAIN && STATIC_SHOP_DOMAIN) ||
   (window.Shopify && window.Shopify.shop) ||
   (typeof __st !== 'undefined' && __st && __st.slug) ||
-  "";
+  "clickandcollect1234.myshopify.com";
 
-let VARIANT_ID = USE_STATIC_VARIANT ? STATIC_VARIANT_ID : null;
-
-/* ===== storage keys ===== */
-const SAVED_LOC_KEY = 'pickup.selectedLocation';
+/* ======== STORAGE KEYS ======== */
+const SAVED_KEY = 'pickup.selectedLocation';
 const SAVED_PC_KEY  = 'pickup.lastPostcode';
 
-/* ===== dom ===== */
+/* ======== DOM ======== */
 const deliveryMethods = document.querySelectorAll('.delivery-method');
 const postcodeInput   = document.getElementById('postcode-input');
 const searchButton    = document.getElementById('search-button');
@@ -151,12 +143,12 @@ const loading         = document.getElementById('loading');
 const checkoutButton  = document.getElementById('checkout');
 const qtyErrorEl      = document.getElementById('qty-error');
 
-/* ===== state ===== */
+/* ======== STATE ======== */
 let selectedMethod   = 'collect';
 let selectedLocation = null;
 let customerCoords   = null;
 
-/* ===== utils ===== */
+/* ======== UTILS ======== */
 const escapeHTML = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function formatAddress(a){
   const line1=[a?.address1,a?.address2].filter(Boolean).join(', ');
@@ -174,24 +166,22 @@ function setCheckoutEnabled(on){ checkoutButton.classList.toggle('disabled',!on)
 function showLoading(on){ loading.classList.toggle('hidden',!on); }
 function showQtyError(msg){ qtyErrorEl.textContent = msg || ""; qtyErrorEl.classList.toggle('hidden', !msg); }
 
-/* ===== storage ===== */
-function persistSelection(location){
-  try{
-    const payload = {
-      id: location.id || location.raw?.locationId || null,
-      name: location.name,
-      available: Number(location.available ?? 0),
-      address: location.address,
-      raw: location.raw ?? null
-    };
-    localStorage.setItem(SAVED_LOC_KEY, JSON.stringify(payload));
-  }catch(e){ console.warn('persistSelection failed', e); }
+/* ======== STORAGE HELPERS ======== */
+function readSavedSelection(){
+  try { return JSON.parse(localStorage.getItem(SAVED_KEY) || 'null'); }
+  catch { return null; }
 }
-function readSavedSelection(){ try{ return JSON.parse(localStorage.getItem(SAVED_LOC_KEY) || 'null'); } catch{ return null; } }
-function persistPostcode(pc){ try{ localStorage.setItem(SAVED_PC_KEY, String(pc||'')); }catch{} }
-function readSavedPostcode(){ try{ return localStorage.getItem(SAVED_PC_KEY) || ''; }catch{ return ''; } }
+function persistSelection(location){
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(location)); } catch {}
+}
+function persistPostcode(pc){
+  try{ localStorage.setItem(SAVED_PC_KEY, String(pc||'')); }catch{}
+}
+function readSavedPostcode(){
+  try{ return localStorage.getItem(SAVED_PC_KEY) || ''; }catch{ return ''; }
+}
 
-/* ===== cart helpers ===== */
+/* ======== CART HELPERS ======== */
 async function removePickupMeta(){
   try{
     const cart=await fetch('/cart.js',{credentials:'same-origin'}).then(r=>r.json());
@@ -254,7 +244,7 @@ async function addOrUpdatePickupMeta(location){
   finally{ addingPickupMeta=false; }
 }
 
-/* ===== geo ===== */
+/* ======== GEO ======== */
 function getCustomerLocation(){
   return new Promise(resolve=>{
     if(navigator.geolocation){
@@ -266,12 +256,27 @@ function getCustomerLocation(){
   });
 }
 
-/* ===== init ===== */
+/* ======== PINCODE + RADIUS ======== */
+function withinRadius50(loc){
+  const d = (typeof loc.distanceKm === 'number') ? loc.distanceKm
+        : (typeof loc.distance === 'number')    ? loc.distance
+        : null;
+  return d != null && d <= RADIUS_KM;
+}
+function getEffectivePincode(savedSel){
+  const last = readSavedPostcode();
+  if (last && /^\d{3,10}$/.test(last)) return last;
+  const zip = savedSel?.raw?.address?.zip || savedSel?.raw?.address?.postalCode;
+  if (zip && /^\d{3,10}$/.test(String(zip))) return String(zip);
+  return (postcodeInput.value || '').trim();
+}
+
+/* ======== INIT ======== */
 document.addEventListener('DOMContentLoaded', async ()=>{
   await removePickupMeta();
   const savedSel = readSavedSelection();
-  const savedPC  = readSavedPostcode() || postcodeInput.value || '2000';
-  if (savedPC) postcodeInput.value = savedPC;
+  const initialPC = getEffectivePincode(savedSel);
+  if (initialPC) postcodeInput.value = initialPC;
   customerCoords=await getCustomerLocation();
 
   deliveryMethods.forEach(m=>{
@@ -301,15 +306,15 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
   checkoutButton.addEventListener('click', onCheckoutClick);
 
-  // auto-load using saved postcode
+  // auto-load using saved selection + LS pincode
   locationSection.classList.add('active');
-  if (savedPC) await loadPickup(savedPC, savedSel?.id || savedSel?.raw?.locationId || null);
+  if (initialPC) await loadPickup(initialPC, (savedSel?.id || savedSel?.raw?.locationId || null));
 });
 
 window.addEventListener('pageshow', async ()=>{ await removePickupMeta(); });
 document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible'){ await removePickupMeta(); }});
 
-/* ===== checkout validation ===== */
+/* ======== CHECKOUT CLICK VALIDATION ======== */
 async function onCheckoutClick(e){
   e.preventDefault();
   e.stopPropagation();
@@ -345,7 +350,7 @@ async function onCheckoutClick(e){
   window.location.href='/checkout';
 }
 
-/* ===== search / render ===== */
+/* ======== SEARCH / RENDER ======== */
 async function onSearch(){
   const postcode=postcodeInput.value.trim();
   if(!postcode){ alert('Please enter a postcode'); return; }
@@ -355,7 +360,7 @@ async function onSearch(){
   await loadPickup(postcode, (savedSel?.id || savedSel?.raw?.locationId || null));
 }
 
-/* ===== API call (exact shape) with robust diagnostics ===== */
+/* ======== API CALL (exact shape) + FILTER <= 50 KM ======== */
 async function loadPickup(pincode, preferredId=null){
   showLoading(true);
   setCheckoutEnabled(false);
@@ -364,73 +369,81 @@ async function loadPickup(pincode, preferredId=null){
   locationsList.innerHTML='';
 
   try{
-    const variantId = await getTargetVariantId() || "";
+    const variantId = await getTargetVariantId() || VARIANT_ID || '';
 
+    // Build EXACT request shape
     const myHeaders = new Headers();
     myHeaders.append("Content-Type", "application/json");
 
-    const payload = {
+    // Prefer LS-based pincode if caller passed empty
+    const effectivePincode = (pincode && String(pincode).trim()) || getEffectivePincode(readSavedSelection()) || "";
+
+    const raw = JSON.stringify({
       myShopifyDomain: MY_SHOP_DOMAIN,
-      pincode: pincode || "2000",
+      pincode: effectivePincode,
       variantId: variantId,
-      radiusKm: 50
-    };
-
-    // DIAGNOSTIC: log what we're sending
-    console.log("[pickup] POST", PICKUP_API, payload);
-
-    const res = await fetch(PICKUP_API, {
-      method: "POST",
-      headers: myHeaders,
-      body: JSON.stringify(payload),
-      redirect: "follow"
+      radiusKm: RADIUS_KM
     });
 
-    const rawText = await res.text().catch(()=>"(no body)");
-    // Try to parse JSON if possible; otherwise keep as text
-    let data;
-    try { data = rawText ? JSON.parse(rawText) : {}; } catch { data = { _raw: rawText }; }
+    const requestOptions = {
+      method: "POST",
+      headers: myHeaders,
+      body: raw,
+      redirect: "follow"
+    };
 
+    const res = await fetch(PICKUP_API, requestOptions);
+    const text = await res.text();
     if(!res.ok){
-      console.error("[pickup] HTTP", res.status, data || rawText);
-      const reason = (data && (data.message || data.error)) || rawText || "Unknown error";
-      locationsList.innerHTML = `<div class="error-message">Pickup lookup failed (${res.status}). ${escapeHTML(String(reason)).slice(0,400)}</div>`;
+      console.error("Pickup API error", res.status, text);
+      locationsList.innerHTML=`<div class="error-message">Pickup lookup failed (${res.status}).</div>`;
       return;
     }
 
-    // DIAGNOSTIC: log response
-    console.log("[pickup] response", data);
+    let data = {};
+    try { data = JSON.parse(text); } catch { data = {}; }
 
-    const list=[...(data.inRadius||[]),...(data.outOfRadius||[])].map(loc=>{
-      const formatted=formatAddress(loc.address);
-      const dist=typeof loc.distanceKm==='number'?loc.distanceKm:calculateDistance(
-        customerCoords?.latitude,customerCoords?.longitude,
-        loc.coordinates?.lat,loc.coordinates?.lng
+    // normalize
+    const all = [...(data.inRadius||[]), ...(data.outOfRadius||[])].map(loc=>{
+      const formatted = formatAddress(loc.address);
+      const dist = (typeof loc.distanceKm === 'number') ? loc.distanceKm : calculateDistance(
+        customerCoords?.latitude, customerCoords?.longitude,
+        loc.coordinates?.lat, loc.coordinates?.lng
       );
       const available = Number(
         loc.available ?? loc.onHand ?? loc.quantity ?? loc.stock ?? (loc.raw && loc.raw.available) ?? 0
       );
-      return{
-        id:loc.locationId||loc.id,
-        name:loc.name,
-        distance:dist,
+      return {
+        id: loc.locationId || loc.id,
+        name: loc.name,
+        distance: dist,
         available,
-        address:{formatted},
-        raw:loc
+        address: { formatted },
+        raw: loc
       };
     });
 
-    renderLocations(list, preferredId);
+    // filter within 50 km
+    const list = all.filter(withinRadius50);
+
+    // only auto-select preferred if within 50 km
+    let preferredIdInRange = null;
+    if (preferredId) {
+      const hit = list.find(l => String(l.id) === String(preferredId));
+      if (hit) preferredIdInRange = preferredId;
+    }
+
+    renderLocations(list, preferredIdInRange);
   }catch(err){
-    console.error("[pickup] fetch failed", err);
-    locationsList.innerHTML=`<div class="error-message">Failed to load stock information (network or CORS). See console for details.</div>`;
+    console.error(err);
+    locationsList.innerHTML=`<div class="error-message">Failed to load stock information. Please try again.</div>`;
   }finally{ showLoading(false); }
 }
 
 function renderLocations(list, preferredId=null){
   locationsList.innerHTML='';
   if(!list.length){
-    locationsList.innerHTML='<div class="no-results">No locations found for the entered postcode.</div>';
+    locationsList.innerHTML='<div class="no-results">No locations within 50 km.</div>';
     return;
   }
   list.sort((a,b)=> (a.distance??1e9)-(b.distance??1e9));
@@ -496,6 +509,12 @@ function locationRow(location){
       raw: location.raw
     };
     persistSelection(selectedLocation);
+
+    // also persist postcode from selected location for future searches
+    try {
+      const zip = location?.raw?.address?.zip || location?.raw?.address?.postalCode;
+      if (zip) persistPostcode(String(zip));
+    } catch {}
 
     await addOrUpdatePickupMeta(selectedLocation);
 
