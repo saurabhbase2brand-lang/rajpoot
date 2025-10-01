@@ -111,28 +111,37 @@
 </div>
 
 <script>
-/* ========= PREVENT DOUBLE-INIT (avoids "already declared") ========= */
+/* ===== prevent double init (stops "already declared") ===== */
 if (window.__pickupWidgetInitialized) {
-  console.debug("Pickup widget already initialized. Skipping.");
+  console.debug("Pickup widget already initialized — skipping.");
 } else {
   window.__pickupWidgetInitialized = true;
 
-/* ======== CONFIG ======== */
-const PICKUP_API          = "https://rows-driver-upgrading-steady.trycloudflare.com/api/pickup";
-let   VARIANT_ID          = "47230794924287";     // using your payload's variantId by default
-const PICKUP_META_VARIANT = "46950237503744";     // hidden meta line to carry pickup info
+/* ===== config ===== */
+const PICKUP_API = "https://rows-driver-upgrading-steady.trycloudflare.com/api/pickup";
 
-// Resolve the shop domain safely
+/** Toggle these if you want to hard-pin values (helps avoid 403 due to mismatches) */
+const USE_STATIC_SHOP_DOMAIN = true;
+const STATIC_SHOP_DOMAIN     = "clickandcollect1234.myshopify.com";
+const USE_STATIC_VARIANT     = true;
+const STATIC_VARIANT_ID      = "47230794924287";
+
+const PICKUP_META_VARIANT = "46950237503744";
+
+/* ===== resolve shop domain and variant ===== */
 const MY_SHOP_DOMAIN =
+  (USE_STATIC_SHOP_DOMAIN && STATIC_SHOP_DOMAIN) ||
   (window.Shopify && window.Shopify.shop) ||
   (typeof __st !== 'undefined' && __st && __st.slug) ||
-  "clickandcollect1234.myshopify.com";
+  "";
 
-/* ======== STORAGE KEYS ======== */
+let VARIANT_ID = USE_STATIC_VARIANT ? STATIC_VARIANT_ID : null;
+
+/* ===== storage keys ===== */
 const SAVED_LOC_KEY = 'pickup.selectedLocation';
 const SAVED_PC_KEY  = 'pickup.lastPostcode';
 
-/* ======== DOM ======== */
+/* ===== dom ===== */
 const deliveryMethods = document.querySelectorAll('.delivery-method');
 const postcodeInput   = document.getElementById('postcode-input');
 const searchButton    = document.getElementById('search-button');
@@ -142,12 +151,12 @@ const loading         = document.getElementById('loading');
 const checkoutButton  = document.getElementById('checkout');
 const qtyErrorEl      = document.getElementById('qty-error');
 
-/* ======== STATE ======== */
+/* ===== state ===== */
 let selectedMethod   = 'collect';
 let selectedLocation = null;
 let customerCoords   = null;
 
-/* ======== UTILS ======== */
+/* ===== utils ===== */
 const escapeHTML = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function formatAddress(a){
   const line1=[a?.address1,a?.address2].filter(Boolean).join(', ');
@@ -163,12 +172,9 @@ function calculateDistance(lat1, lon1, lat2, lon2){
 }
 function setCheckoutEnabled(on){ checkoutButton.classList.toggle('disabled',!on); checkoutButton.disabled=!on; }
 function showLoading(on){ loading.classList.toggle('hidden',!on); }
-function showQtyError(msg){
-  qtyErrorEl.textContent = msg || "";
-  qtyErrorEl.classList.toggle('hidden', !msg);
-}
+function showQtyError(msg){ qtyErrorEl.textContent = msg || ""; qtyErrorEl.classList.toggle('hidden', !msg); }
 
-/* ======== STORAGE ======== */
+/* ===== storage ===== */
 function persistSelection(location){
   try{
     const payload = {
@@ -181,18 +187,11 @@ function persistSelection(location){
     localStorage.setItem(SAVED_LOC_KEY, JSON.stringify(payload));
   }catch(e){ console.warn('persistSelection failed', e); }
 }
-function readSavedSelection(){
-  try{ return JSON.parse(localStorage.getItem(SAVED_LOC_KEY) || 'null'); }
-  catch{ return null; }
-}
-function persistPostcode(pc){
-  try{ localStorage.setItem(SAVED_PC_KEY, String(pc||'')); }catch{}
-}
-function readSavedPostcode(){
-  try{ return localStorage.getItem(SAVED_PC_KEY) || ''; }catch{ return ''; }
-}
+function readSavedSelection(){ try{ return JSON.parse(localStorage.getItem(SAVED_LOC_KEY) || 'null'); } catch{ return null; } }
+function persistPostcode(pc){ try{ localStorage.setItem(SAVED_PC_KEY, String(pc||'')); }catch{} }
+function readSavedPostcode(){ try{ return localStorage.getItem(SAVED_PC_KEY) || ''; }catch{ return ''; } }
 
-/* ======== CART HELPERS ======== */
+/* ===== cart helpers ===== */
 async function removePickupMeta(){
   try{
     const cart=await fetch('/cart.js',{credentials:'same-origin'}).then(r=>r.json());
@@ -214,7 +213,6 @@ async function getLiveCart(){
   }
 }
 
-// choose which variant to validate: configured id or first non-meta line
 async function getTargetVariantId(){
   if (VARIANT_ID) return String(VARIANT_ID);
   const cart = await getLiveCart();
@@ -256,7 +254,7 @@ async function addOrUpdatePickupMeta(location){
   finally{ addingPickupMeta=false; }
 }
 
-/* ======== GEO ======== */
+/* ===== geo ===== */
 function getCustomerLocation(){
   return new Promise(resolve=>{
     if(navigator.geolocation){
@@ -268,7 +266,7 @@ function getCustomerLocation(){
   });
 }
 
-/* ======== INIT ======== */
+/* ===== init ===== */
 document.addEventListener('DOMContentLoaded', async ()=>{
   await removePickupMeta();
   const savedSel = readSavedSelection();
@@ -303,7 +301,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
   checkoutButton.addEventListener('click', onCheckoutClick);
 
-  // auto-load using saved postcode (or default 2000)
+  // auto-load using saved postcode
   locationSection.classList.add('active');
   if (savedPC) await loadPickup(savedPC, savedSel?.id || savedSel?.raw?.locationId || null);
 });
@@ -311,7 +309,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 window.addEventListener('pageshow', async ()=>{ await removePickupMeta(); });
 document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible'){ await removePickupMeta(); }});
 
-/* ======== CHECKOUT CLICK VALIDATION ======== */
+/* ===== checkout validation ===== */
 async function onCheckoutClick(e){
   e.preventDefault();
   e.stopPropagation();
@@ -347,7 +345,7 @@ async function onCheckoutClick(e){
   window.location.href='/checkout';
 }
 
-/* ======== SEARCH / RENDER ======== */
+/* ===== search / render ===== */
 async function onSearch(){
   const postcode=postcodeInput.value.trim();
   if(!postcode){ alert('Please enter a postcode'); return; }
@@ -357,7 +355,7 @@ async function onSearch(){
   await loadPickup(postcode, (savedSel?.id || savedSel?.raw?.locationId || null));
 }
 
-/* === API CALL (exact shape you provided) === */
+/* ===== API call (exact shape) with robust diagnostics ===== */
 async function loadPickup(pincode, preferredId=null){
   showLoading(true);
   setCheckoutEnabled(false);
@@ -366,35 +364,42 @@ async function loadPickup(pincode, preferredId=null){
   locationsList.innerHTML='';
 
   try{
-    const variantId = await getTargetVariantId() || VARIANT_ID || '';
+    const variantId = await getTargetVariantId() || "";
 
-    // ---- EXACT requestOptions build you shared ----
     const myHeaders = new Headers();
     myHeaders.append("Content-Type", "application/json");
 
-    const raw = JSON.stringify({
+    const payload = {
       myShopifyDomain: MY_SHOP_DOMAIN,
       pincode: pincode || "2000",
       variantId: variantId,
       radiusKm: 50
-    });
-
-    const requestOptions = {
-      method: "POST",
-      headers: myHeaders,
-      body: raw,
-      redirect: "follow"
     };
 
-    const res = await fetch(PICKUP_API, requestOptions);
+    // DIAGNOSTIC: log what we're sending
+    console.log("[pickup] POST", PICKUP_API, payload);
+
+    const res = await fetch(PICKUP_API, {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: "follow"
+    });
+
+    const rawText = await res.text().catch(()=>"(no body)");
+    // Try to parse JSON if possible; otherwise keep as text
+    let data;
+    try { data = rawText ? JSON.parse(rawText) : {}; } catch { data = { _raw: rawText }; }
 
     if(!res.ok){
-      const errText = await res.text().catch(()=>"(no body)");
-      console.error("Pickup API error", res.status, errText, "Payload:", raw);
-      throw new Error(`Pickup API error: ${res.status}`);
+      console.error("[pickup] HTTP", res.status, data || rawText);
+      const reason = (data && (data.message || data.error)) || rawText || "Unknown error";
+      locationsList.innerHTML = `<div class="error-message">Pickup lookup failed (${res.status}). ${escapeHTML(String(reason)).slice(0,400)}</div>`;
+      return;
     }
 
-    const data = await res.json();
+    // DIAGNOSTIC: log response
+    console.log("[pickup] response", data);
 
     const list=[...(data.inRadius||[]),...(data.outOfRadius||[])].map(loc=>{
       const formatted=formatAddress(loc.address);
@@ -417,8 +422,8 @@ async function loadPickup(pincode, preferredId=null){
 
     renderLocations(list, preferredId);
   }catch(err){
-    console.error(err);
-    locationsList.innerHTML=`<div class="error-message">Failed to load stock information. Please try again.</div>`;
+    console.error("[pickup] fetch failed", err);
+    locationsList.innerHTML=`<div class="error-message">Failed to load stock information (network or CORS). See console for details.</div>`;
   }finally{ showLoading(false); }
 }
 
@@ -432,7 +437,7 @@ function renderLocations(list, preferredId=null){
   list.forEach(loc=>locationsList.appendChild(locationRow(loc)));
 
   if (preferredId){
-    const match = locationsList.querySelector(\`.location-item[data-location-id="\${CSS.escape(preferredId)}"]\`);
+    const match = locationsList.querySelector(`.location-item[data-location-id="${CSS.escape(preferredId)}"]`);
     if (match){ match.querySelector('[data-select]')?.click(); return; }
   }
   const first = locationsList.querySelector('.location-item');
@@ -442,21 +447,21 @@ function renderLocations(list, preferredId=null){
 function locationRow(location){
   const div=document.createElement('div');
   const inStock=(location.available ?? 0) > 0;
-  const distanceStr=location.distance!=null?\`\${location.distance} km\`:'';
+  const distanceStr=location.distance!=null?`${location.distance} km`:''; 
 
   div.className='location-item';
   div.dataset.locationId=location.id;
   div.dataset.available = Number(location.available ?? 0);
   div.dataset.name = location.name;
 
-  div.innerHTML=\`
+  div.innerHTML=`
     <div class="cnc-row">
       <div class="cnc-left" data-select>
-        <input class="cnc-radio" type="radio" name="pickup-radio" aria-label="Select \${escapeHTML(location.name)}" />
-        <div class="cnc-name">\${escapeHTML(location.name)}</div>
-        <div class="cnc-distance">\${escapeHTML(distanceStr)}</div>
-        <div class="cnc-badge \${inStock?'cnc-in':'cnc-out'}">
-          \${inStock ? '✓ In stock' : '✖ Out of stock'}\${Number.isFinite(location.available) ? \` (\${location.available})\` : ''}
+        <input class="cnc-radio" type="radio" name="pickup-radio" aria-label="Select ${escapeHTML(location.name)}" />
+        <div class="cnc-name">${escapeHTML(location.name)}</div>
+        <div class="cnc-distance">${escapeHTML(distanceStr)}</div>
+        <div class="cnc-badge ${inStock?'cnc-in':'cnc-out'}">
+          ${inStock ? '✓ In stock' : '✖ Out of stock'}${Number.isFinite(location.available) ? ` (${location.available})` : ''}
         </div>
       </div>
       <div class="cnc-right">
@@ -465,8 +470,8 @@ function locationRow(location){
         </button>
       </div>
     </div>
-    <div class="sdev-location-address">\${(location.address.formatted||[]).map(escapeHTML).join('<br>')}</div>
-  \`;
+    <div class="sdev-location-address">${(location.address.formatted||[]).map(escapeHTML).join('<br>')}</div>
+  `;
 
   const radio   = div.querySelector('.cnc-radio');
   const select  = div.querySelector('[data-select]');
