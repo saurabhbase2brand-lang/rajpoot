@@ -1,10 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Click & Collect – stock check on checkout</title>
+<style>
+  .cart__ctas { display: none; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:#f8f9fa;color:#111;line-height:1.6;padding:20px}
+
+  .delivery-container{max-width:520px;margin:0 auto;background:#fff;border:1px solid #01AF67;border-radius:6px;overflow:hidden}
+  .delivery-header{padding:20px;border-bottom:1px solid #e1e8ed}
+  .delivery-title{font-size:16px;font-weight:700;margin-bottom:16px}
+
+  .delivery-methods{display:flex;gap:8px;margin-bottom:20px}
+  .delivery-method{display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;color:#0f172a}
+  .delivery-method svg{width:22px;height:22px}
+  .delivery-method.active span,.delivery-method.active svg{color:#01AF67;fill:#01AF67}
+
+  .postcode-section{margin-bottom:8px}
+  .postcode-label{font-size:15px;margin-bottom:8px}
+  .postcode-input-container{display:flex}
+  .postcode-input{flex:1;height:46px;border:1px solid #E1E1E1;border-right:none;padding:0 14px;font-size:15px}
+  .search-button{min-width:50px;border:none;background:#01AF67;color:#fff;display:grid;place-items:center;padding:0 14px;cursor:pointer}
+  .search-button:hover{background:#0b9a5c}
+
+  .location-section{padding:14px 20px 8px 20px;display:none;border-top:1px solid #e1e8ed}
+  .location-section.active{display:block}
+  .location-selection-label{font-weight:600;margin:6px 0 14px 0;color:#111}
+
+  .location-item{padding:12px 0;border-bottom:1px solid #e9eef2}
+  .location-item.selected{background:#f7fffb;border-top:1px solid #01AF67;border-bottom:1px solid #01AF67}
+
+  .cnc-row{display:flex;align-items:center;gap:10px}
+  .cnc-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+  .cnc-right{display:flex;align-items:center;gap:10px}
+
+  .cnc-radio{appearance:none;-webkit-appearance:none;inline-size:18px;block-size:18px;border:2px solid #cbd5e1;border-radius:999px;display:inline-grid;place-items:center;cursor:pointer;flex:0 0 auto}
+  .cnc-radio:checked{border-color:#01AF67}
+  .cnc-radio:checked::after{content:"";inline-size:10px;block-size:10px;background:#01AF67;border-radius:999px}
+
+  .cnc-name{font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cnc-distance{margin-left:6px;color:#6b7280;font-size:13px;white-space:nowrap}
+  .cnc-badge{margin-left:8px;font-size:13px;font-weight:700;white-space:nowrap}
+  .cnc-badge.cnc-in{color:#01AF67}
+  .cnc-badge.cnc-out{color:#e74c3c}
+
+  .cnc-caret-btn{border:0;background:transparent;cursor:pointer;width:24px;height:24px;display:inline-grid;place-items:center}
+  .cnc-caret{width:14px;height:14px;transition:transform .18s ease}
+  .location-item.is-open .cnc-caret{transform:rotate(180deg)}
+
+  .sdev-location-address{color:#111;padding:8px 28px 6px 28px;line-height:1.45;overflow:hidden;max-height:0;transition:max-height .22s ease}
+  .location-item.is-open .sdev-location-address{max-height:220px}
+
+  .loading{text-align:center;padding:28px 0;color:#6b7280}
+  .loading.hidden{display:none}
+  .spinner{width:36px;height:36px;border:4px solid #ecf0f1;border-top:4px solid #3498db;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+  @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+
+  .no-results,.error-message{text-align:center;color:#6b7280;padding:16px 0}
+  .error-message{color:#e74c3c}
+  .hidden{display:none}
+
+  .checkout-section{padding:16px 20px;border-top:1px solid #e1e8ed}
+  .checkout-button{width:100%;background:#111;color:#fff;border:none;padding:14px;font-weight:700;cursor:pointer;border-radius:4px}
+  .checkout-button.disabled{opacity:.6;cursor:not-allowed}
+</style>
+</head>
+<body>
+
+<div class="delivery-container">
+  <div class="delivery-header">
+    <h2 class="delivery-title">Delivery method</h2>
+
+    <div class="delivery-methods">
+      <div class="delivery-method click-collect active" data-method="collect">
+        <svg viewBox="0 0 512 512"><path d="M496.395 150.997 261.728 1.664a10.667 10.667 0 0 0-11.456 0L15.605 150.997A10.667 10.667 0 0 0 10.677 160v341.333c0 5.888 4.779 10.667 10.667 10.667h469.333c5.888 0 10.667-4.779 10.645-10.667V160c-.018-3.648-1.895-7.04-4.967-9.003zM309.344 490.667H202.677V416c0-29.397 23.936-53.333 53.333-53.333s53.333 23.936 53.333 53.333zM480.011 490.667H32.011V165.845l224-142.549 224 142.549z"/></svg>
+        <span>Click & Collect</span>
+      </div>
+      <div class="delivery-method home-delivery" data-method="delivery">
+        <svg viewBox="0 0 512 512"><path d="M53.336 0a10.833 10.833 0 0 0-9.899 6.699L.771 113.365A10.666 10.666 0 0 0 10.67 128h10.667v373.333c0 5.888 4.779 10.667 10.667 10.667h448c5.888 0 10.667-4.779 10.667-10.667V128h10.667a10.667 10.667 0 0 0 8.832-4.693 10.67 10.67 0 0 0 .405-9.942L468.568 6.699A10.667 10.667 0 0 0 458.67 0zm245.334 490.667h-85.333V384h85.333zM469.336 490.667H320.003V373.333c0-5.888-4.779-10.667-10.667-10.667H202.67c-5.888 0-10.667 4.779-10.667 10.667v117.333H42.67V128h426.667zM26.414 106.667l34.133-85.333h390.891l34.133 85.333z"/></svg>
+        <span>Home Delivery</span>
+      </div>
+    </div>
+
+    <div class="postcode-section">
+      <div class="postcode-label" id="postcode-label">Search for a location to pick up your order:</div>
+      <div class="postcode-input-container">
+        <input id="postcode-input" class="postcode-input" type="text" placeholder="Enter Postcode" maxlength="10" value="2000"/>
+        <button id="search-button" class="search-button" aria-label="Search">
+          <svg viewBox="0 0 512 512" width="18" height="18"><path fill="currentColor" d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4 9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="location-section" id="location-section">
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+      <p>Loading stock information…</p>
+    </div>
+    <div class="location-selection-label">Please choose a pickup location:</div>
+    <div id="locations-list"></div>
+  </div>
+
+  <div class="checkout-section">
+    <div id="qty-error" class="error-message hidden"></div>
+    <button id="checkout" class="checkout-button disabled" disabled>Check out</button>
+  </div>
+</div>
+
 <script>
 /* ======== CONFIG ======== */
 const PICKUP_API          = "https://rows-driver-upgrading-steady.trycloudflare.com/api/pickup";
 let   VARIANT_ID          = null;                  // set to a variant id string to lock validation to that variant
 const PICKUP_META_VARIANT = "46950237503744";     // hidden meta line to carry pickup info
 
-// Resolve the shop domain safely (Shopify storefronts expose window.Shopify.shop)
+// Resolve the shop domain safely
 const MY_SHOP_DOMAIN =
   (window.Shopify && window.Shopify.shop) ||
   (typeof __st !== 'undefined' && __st && __st.slug) ||
@@ -96,7 +208,6 @@ async function getLiveCart(){
   }
 }
 
-// choose which variant to validate: configured id or first non-meta line
 async function getTargetVariantId(){
   if (VARIANT_ID) return String(VARIANT_ID);
   const cart = await getLiveCart();
@@ -199,7 +310,6 @@ async function onCheckoutClick(e){
   e.stopPropagation();
 
   if (selectedMethod !== 'collect'){
-    // No pickup validation for home delivery
     showQtyError("");
     window.location.href='/checkout';
     return;
@@ -212,11 +322,9 @@ async function onCheckoutClick(e){
     return;
   }
 
-  // selected location values captured at render/select time
   const locName   = row.dataset.name || 'Selected location';
   const available = Number(row.dataset.available || 0);
 
-  // get live cart & compute qty for the target variant
   const cart = await getLiveCart();
   const vid  = await getTargetVariantId();
   const qty  = vid ? qtyForVariant(cart, vid) : 0;
@@ -224,10 +332,9 @@ async function onCheckoutClick(e){
   if (qty > available){
     showQtyError(`Only ${available} available at "${locName}". You have ${qty} items in your cart. Please reduce the quantity or choose another location.`);
     setCheckoutEnabled(false);
-    return; // block checkout
+    return;
   }
 
-  // all good → proceed
   showQtyError("");
   setCheckoutEnabled(true);
   window.location.href='/checkout';
@@ -243,13 +350,7 @@ async function onSearch(){
   await loadPickup(postcode, (savedSel?.id || savedSel?.raw?.locationId || null));
 }
 
-/**
- * Integrated API call with:
- *  - myShopifyDomain (resolved from Shopify.shop or fallback)
- *  - pincode (from input)
- *  - variantId (from cart or configured)
- *  - radiusKm (100 default here; change as needed)
- */
+/* === Integrated API call with myShopifyDomain + pincode + variantId + radiusKm === */
 async function loadPickup(pincode, preferredId=null){
   showLoading(true);
   setCheckoutEnabled(false);
@@ -260,12 +361,11 @@ async function loadPickup(pincode, preferredId=null){
   try{
     const variantId = await getTargetVariantId() || VARIANT_ID || '';
 
-    // EXACT payload you asked to implement
     const payload = {
       myShopifyDomain: MY_SHOP_DOMAIN,
       pincode,
       variantId,
-      radiusKm: 100
+      radiusKm: 50
     };
 
     const res = await fetch(PICKUP_API, {
@@ -329,7 +429,7 @@ function locationRow(location){
 
   div.className='location-item';
   div.dataset.locationId=location.id;
-  div.dataset.available = Number(location.available ?? 0); // used at checkout validation
+  div.dataset.available = Number(location.available ?? 0);
   div.dataset.name = location.name;
 
   div.innerHTML=`
@@ -395,3 +495,6 @@ function locationRow(location){
   return div;
 }
 </script>
+
+</body>
+</html>
