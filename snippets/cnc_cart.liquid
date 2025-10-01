@@ -111,9 +111,15 @@
 </div>
 
 <script>
+/* ========= PREVENT DOUBLE-INIT (avoids "already declared") ========= */
+if (window.__pickupWidgetInitialized) {
+  console.debug("Pickup widget already initialized. Skipping.");
+} else {
+  window.__pickupWidgetInitialized = true;
+
 /* ======== CONFIG ======== */
 const PICKUP_API          = "https://rows-driver-upgrading-steady.trycloudflare.com/api/pickup";
-let   VARIANT_ID          = '47230794924287';                  // set to a variant id string to lock validation to that variant
+let   VARIANT_ID          = "47230794924287";     // using your payload's variantId by default
 const PICKUP_META_VARIANT = "46950237503744";     // hidden meta line to carry pickup info
 
 // Resolve the shop domain safely
@@ -208,6 +214,7 @@ async function getLiveCart(){
   }
 }
 
+// choose which variant to validate: configured id or first non-meta line
 async function getTargetVariantId(){
   if (VARIANT_ID) return String(VARIANT_ID);
   const cart = await getLiveCart();
@@ -265,7 +272,7 @@ function getCustomerLocation(){
 document.addEventListener('DOMContentLoaded', async ()=>{
   await removePickupMeta();
   const savedSel = readSavedSelection();
-  const savedPC  = readSavedPostcode() || postcodeInput.value || '';
+  const savedPC  = readSavedPostcode() || postcodeInput.value || '2000';
   if (savedPC) postcodeInput.value = savedPC;
   customerCoords=await getCustomerLocation();
 
@@ -296,7 +303,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
   checkoutButton.addEventListener('click', onCheckoutClick);
 
-  // auto-load using saved postcode
+  // auto-load using saved postcode (or default 2000)
   locationSection.classList.add('active');
   if (savedPC) await loadPickup(savedPC, savedSel?.id || savedSel?.raw?.locationId || null);
 });
@@ -350,7 +357,7 @@ async function onSearch(){
   await loadPickup(postcode, (savedSel?.id || savedSel?.raw?.locationId || null));
 }
 
-/* === Integrated API call with myShopifyDomain + pincode + variantId + radiusKm === */
+/* === API CALL (exact shape you provided) === */
 async function loadPickup(pincode, preferredId=null){
   showLoading(true);
   setCheckoutEnabled(false);
@@ -361,21 +368,31 @@ async function loadPickup(pincode, preferredId=null){
   try{
     const variantId = await getTargetVariantId() || VARIANT_ID || '';
 
-    const payload = {
-      myShopifyDomain: MY_SHOP_DOMAIN,
-      pincode,
-      variantId,
-      radiusKm: 50
-    };
+    // ---- EXACT requestOptions build you shared ----
+    const myHeaders = new Headers();
+    myHeaders.append("Content-Type", "application/json");
 
-    const res = await fetch(PICKUP_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      redirect: "follow"
+    const raw = JSON.stringify({
+      myShopifyDomain: MY_SHOP_DOMAIN,
+      pincode: pincode || "2000",
+      variantId: variantId,
+      radiusKm: 50
     });
 
-    if(!res.ok) throw new Error(`Pickup API error: ${res.status}`);
+    const requestOptions = {
+      method: "POST",
+      headers: myHeaders,
+      body: raw,
+      redirect: "follow"
+    };
+
+    const res = await fetch(PICKUP_API, requestOptions);
+
+    if(!res.ok){
+      const errText = await res.text().catch(()=>"(no body)");
+      console.error("Pickup API error", res.status, errText, "Payload:", raw);
+      throw new Error(`Pickup API error: ${res.status}`);
+    }
 
     const data = await res.json();
 
@@ -415,7 +432,7 @@ function renderLocations(list, preferredId=null){
   list.forEach(loc=>locationsList.appendChild(locationRow(loc)));
 
   if (preferredId){
-    const match = locationsList.querySelector(`.location-item[data-location-id="${CSS.escape(preferredId)}"]`);
+    const match = locationsList.querySelector(\`.location-item[data-location-id="\${CSS.escape(preferredId)}"]\`);
     if (match){ match.querySelector('[data-select]')?.click(); return; }
   }
   const first = locationsList.querySelector('.location-item');
@@ -425,21 +442,21 @@ function renderLocations(list, preferredId=null){
 function locationRow(location){
   const div=document.createElement('div');
   const inStock=(location.available ?? 0) > 0;
-  const distanceStr=location.distance!=null?`${location.distance} km`:''; 
+  const distanceStr=location.distance!=null?\`\${location.distance} km\`:'';
 
   div.className='location-item';
   div.dataset.locationId=location.id;
   div.dataset.available = Number(location.available ?? 0);
   div.dataset.name = location.name;
 
-  div.innerHTML=`
+  div.innerHTML=\`
     <div class="cnc-row">
       <div class="cnc-left" data-select>
-        <input class="cnc-radio" type="radio" name="pickup-radio" aria-label="Select ${escapeHTML(location.name)}" />
-        <div class="cnc-name">${escapeHTML(location.name)}</div>
-        <div class="cnc-distance">${escapeHTML(distanceStr)}</div>
-        <div class="cnc-badge ${inStock?'cnc-in':'cnc-out'}">
-          ${inStock ? '✓ In stock' : '✖ Out of stock'}${Number.isFinite(location.available) ? ` (${location.available})` : ''}
+        <input class="cnc-radio" type="radio" name="pickup-radio" aria-label="Select \${escapeHTML(location.name)}" />
+        <div class="cnc-name">\${escapeHTML(location.name)}</div>
+        <div class="cnc-distance">\${escapeHTML(distanceStr)}</div>
+        <div class="cnc-badge \${inStock?'cnc-in':'cnc-out'}">
+          \${inStock ? '✓ In stock' : '✖ Out of stock'}\${Number.isFinite(location.available) ? \` (\${location.available})\` : ''}
         </div>
       </div>
       <div class="cnc-right">
@@ -448,8 +465,8 @@ function locationRow(location){
         </button>
       </div>
     </div>
-    <div class="sdev-location-address">${(location.address.formatted||[]).map(escapeHTML).join('<br>')}</div>
-  `;
+    <div class="sdev-location-address">\${(location.address.formatted||[]).map(escapeHTML).join('<br>')}</div>
+  \`;
 
   const radio   = div.querySelector('.cnc-radio');
   const select  = div.querySelector('[data-select]');
@@ -494,6 +511,8 @@ function locationRow(location){
 
   return div;
 }
+
+} // end guard
 </script>
 
 </body>
