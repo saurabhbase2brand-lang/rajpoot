@@ -129,6 +129,11 @@
 /* ====== CONFIG ====== */
 const PICKUP_API = "https://rows-driver-upgrading-steady.trycloudflare.com/api/pickup";
 
+/** REQUIRED: set these based on your page/product context */
+const SHOP_DOMAIN = "clickandcollect1234.myshopify.com";       // e.g. window.__SHOP_DOMAIN__ or data attribute
+const VARIANT_ID  = "47230794924287";                           // current variant id (string or numeric)
+const SEARCH_RADIUS_KM = 50;                                    // default 50 (can be changed)
+
 /* ====== STORAGE KEYS ====== */
 const CNC_LS_SELECTED_LOCATION  = "pickup.selectedLocation";
 const CNC_LS_MODAL_DISMISSED_AT = "pickup.modalDismissedAt";
@@ -156,6 +161,9 @@ function cncFormatAddress(a){
   const line1=[a?.address1,a?.address2].filter(Boolean).join(', ');
   const line2=[a?.city,a?.province].filter(Boolean).join(', ');
   const line3=[a?.country,a?.zip].filter(Boolean).join(' - ');
+  // Some responses already include a formatted string; normalise to array for your renderer
+  if (Array.isArray(a?.formatted)) return a.formatted;
+  if (typeof a?.formatted === 'string') return [a.formatted];
   return [line1,line2,line3].filter(Boolean);
 }
 function cncDistance(lat1, lon1, lat2, lon2){
@@ -167,7 +175,8 @@ function cncDistance(lat1, lon1, lat2, lon2){
 function cncSetSavedChip(loc){
   if(!loc){ cncSavedChip.classList.remove('cnc-show'); cncSavedChip.textContent=''; return; }
   cncSavedChip.classList.add('cnc-show');
-  cncSavedChip.textContent = `Pickup location: ${loc.name} — ${loc.address.formatted.join(', ')}`;
+  const addr = Array.isArray(loc?.address?.formatted) ? loc.address.formatted.join(', ') : cncFormatAddress(loc.address).join(', ');
+  cncSavedChip.textContent = `Pickup location: ${loc.name} — ${addr}`;
 }
 function cncShowModal(){ cncOverlay.classList.add('cnc-show'); }
 function cncHideModal(set24h=true){
@@ -211,14 +220,31 @@ async function cncFetchPickup(postcode){
   cncConfirmBtn.disabled = !cncTempSelected;
 
   try{
-    const r = await fetch(PICKUP_API,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ pincode: postcode, radiusKm: 100 })
-    });
-    if(!r.ok) throw new Error('api error');
+    const myHeaders = new Headers();
+    myHeaders.append("Content-Type", "application/json");
+
+    const payload = {
+      myShopifyDomain: SHOP_DOMAIN,
+      pincode: postcode,
+      variantId: VARIANT_ID || null, // can be null if you only want locations (no inventory)
+      radiusKm: SEARCH_RADIUS_KM
+    };
+
+    const requestOptions = {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: "follow"
+    };
+
+    const r = await fetch(PICKUP_API, requestOptions);
+    if(!r.ok){
+      const errText = await r.text().catch(()=>null);
+      throw new Error(`pickup api error (${r.status}) ${errText||''}`);
+    }
     const data = await r.json();
 
+    // Build list from inRadius; fall back to outOfRadius if you prefer
     let items = (data.inRadius || []).map(loc=>{
       const addr = cncFormatAddress(loc.address);
       let dist = typeof loc.distanceKm === 'number' ? loc.distanceKm : null;
@@ -226,7 +252,7 @@ async function cncFetchPickup(postcode){
         dist = cncDistance(cncGeoCoords.lat, cncGeoCoords.lon, loc.coordinates.lat, loc.coordinates.lng);
       }
       return { id:loc.locationId, name:loc.name, distance:dist, address:{formatted:addr}, raw:loc };
-    }).filter(x => x.distance == null || x.distance <= 100);
+    }).filter(x => x.distance == null || x.distance <= SEARCH_RADIUS_KM);
 
     cncRenderList(items);
   }catch(e){
@@ -240,7 +266,7 @@ async function cncFetchPickup(postcode){
 function cncRenderList(items){
   cncList.innerHTML='';
   if(!items.length){
-    cncList.innerHTML='<div class="cnc-error">No pickup locations within 100 km.</div>';
+    cncList.innerHTML=`<div class="cnc-error">No pickup locations within ${SEARCH_RADIUS_KM} km.</div>`;
     return;
   }
   items.sort((a,b)=> (a.distance??1e9)-(b.distance??1e9));
@@ -271,7 +297,6 @@ function cncRenderList(items){
       cncList.querySelectorAll('.cnc-row').forEach(el=>el.classList.remove('cnc-open'));
       select.classList.add('cnc-open');
 
-      // Save only to a temp var; DO NOT close the modal automatically
       cncTempSelected = loc;
       cncConfirmBtn.disabled = false;
     });
@@ -290,6 +315,11 @@ function cncRenderList(items){
 
 /* ====== INIT ====== */
 document.addEventListener('DOMContentLoaded', async ()=>{
+  // Dynamic override example (optional): read from data attributes on script or container
+  // const container = document.querySelector('.cnc-delivery-container');
+  // if (container?.dataset?.shopDomain) SHOP_DOMAIN = container.dataset.shopDomain;
+  // if (container?.dataset?.variantId)  VARIANT_ID  = container.dataset.variantId;
+
   const saved = localStorage.getItem(CNC_LS_SELECTED_LOCATION);
   if(saved){ try{ cncSetSavedChip(JSON.parse(saved)); }catch{} }
 
@@ -340,5 +370,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   cncOverlay.addEventListener('click', e=>{ if(e.target===cncOverlay) cncHideModal(true); });
 });
 </script>
+
 </body>
 </html>
